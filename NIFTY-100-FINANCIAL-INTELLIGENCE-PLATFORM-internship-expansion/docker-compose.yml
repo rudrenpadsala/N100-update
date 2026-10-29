@@ -1,0 +1,14 @@
+services:
+  n100-platform:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: n100_financial_intelligence
+    ports:
+      - "8501:8501"
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+    volumes:
+      - ./db:/app/db
+      - ./data/annual_reports:/app/data/annual_reports
