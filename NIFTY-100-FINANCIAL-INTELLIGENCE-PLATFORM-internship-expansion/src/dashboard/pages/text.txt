@@ -1,0 +1,4709 @@
+# capital.py
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+
+from utils.db import (
+    get_companies,
+    get_ratios,
+    get_sectors,
+)
+from utils.theme import page_header
+from utils.helpers import display_value
+
+# ==========================================================
+# Divider
+# ==========================================================
+
+def divider():
+
+    st.markdown("---")
+
+
+# ==========================================================
+# Safe Numeric
+# ==========================================================
+
+def num(df, column):
+
+    if column not in df.columns:
+        return pd.Series([0] * len(df), index=df.index)
+
+    return pd.to_numeric(
+        df[column],
+        errors="coerce"
+    ).fillna(0)
+
+
+# ==========================================================
+# Safe Text
+# ==========================================================
+
+def text(df, column):
+
+    if column not in df.columns:
+        return pd.Series(["Unknown"] * len(df), index=df.index)
+
+    return (
+        df[column]
+        .fillna("Unknown")
+        .astype(str)
+    )
+
+
+# ==========================================================
+# Safe Slider Helper
+# ==========================================================
+
+def safe_slider(label, series, default, step, side=st.sidebar):
+    """
+    Builds a slider whose min/max always come from the data and whose
+    default value is clamped inside [min, max] so Streamlit never raises
+    'The default value must be between min and max'.
+    """
+
+    if series.empty or series.isna().all():
+        s_min, s_max = 0.0, 1.0
+    else:
+        s_min = float(series.min())
+        s_max = float(series.max())
+
+    # Guard against min == max (Streamlit needs min < max)
+    if s_min == s_max:
+        s_max = s_min + 1.0
+
+    clamped_default = min(max(default, s_min), s_max)
+
+    return side.slider(
+        label,
+        s_min,
+        s_max,
+        clamped_default,
+        step,
+    )
+
+
+# ==========================================================
+# Capital Allocation Classification
+# ==========================================================
+
+def classify_company(row):
+
+    roe = row.get("return_on_equity_pct", 0)
+    debt = row.get("debt_to_equity", 0)
+    rev = row.get("revenue_cagr_5yr", 0)
+    fcf = row.get("free_cash_flow_cr", 0)
+
+    if roe >= 25 and debt <= 0.30:
+        return "High Quality"
+
+    elif rev >= 18:
+        return "Growth Focus"
+
+    elif debt <= 0.10:
+        return "Debt Free"
+
+    elif fcf >= 1000:
+        return "Cash Generator"
+
+    elif debt >= 2:
+        return "Highly Leveraged"
+
+    elif rev <= 5:
+        return "Turnaround"
+
+    elif roe >= 15:
+        return "Capital Efficient"
+
+    else:
+        return "Balanced"
+
+# ==========================================================
+# Main Page
+# ==========================================================
+
+def show():
+
+    page_header(
+        "💰",
+        "Capital Allocation Map",
+        "See how companies are deploying capital across the Nifty 100.",
+    )
+
+    # ======================================================
+    # Load Database Tables
+    # ======================================================
+
+    companies = get_companies()
+    ratios = get_ratios()
+    sectors = get_sectors()
+
+    if companies.empty or ratios.empty:
+
+        st.error("Database tables are empty.")
+        st.stop()
+
+    # ======================================================
+    # Latest Financial Year
+    # ======================================================
+
+    if "year" not in ratios.columns or "company_id" not in ratios.columns:
+        st.error("Ratios table is missing 'year' or 'company_id' column.")
+        st.stop()
+
+    # --------------------------------------------------------
+    # Rank financial years by number of unique companies they
+    # cover. This avoids two bugs:
+    #   1) Treating "year" as a string and picking the
+    #      alphabetically-largest value (e.g. "Sep 2024" > "Mar 2024")
+    #      instead of the most recent / most complete year.
+    #   2) Accidentally landing on a sparse quarterly snapshot
+    #      (e.g. "Sep 2024" with only 1 company) instead of the
+    #      full annual dataset (e.g. "Mar 2024" with 91 companies).
+    # --------------------------------------------------------
+
+    year_counts = (
+        ratios.groupby("year")["company_id"]
+        .nunique()
+        .sort_values(ascending=False)
+    )
+
+    if year_counts.empty:
+        st.error("No financial year data found in Ratios table.")
+        st.stop()
+
+    # Only offer years that have reasonable company coverage
+    # (i.e. exclude incomplete/partial snapshots). Threshold is
+    # relative to the fullest year so it adapts to any dataset size.
+    coverage_threshold = max(1, int(year_counts.max() * 0.5))
+    available_years = year_counts[year_counts >= coverage_threshold].index.tolist()
+
+    if not available_years:
+        available_years = year_counts.index.tolist()
+
+    st.sidebar.subheader("📅 Financial Year")
+
+    selected_year = st.sidebar.selectbox(
+        "Select Year",
+        available_years,
+        index=0,
+        help="Only years with sufficient company coverage are shown.",
+    )
+
+    latest_year = selected_year
+
+    ratios = (
+        ratios[
+            ratios["year"] == latest_year
+        ]
+        .copy()
+    )
+
+    # ======================================================
+    # Rename Company ID (Companies table)
+    # ======================================================
+
+    if "id" in companies.columns and "company_id" not in companies.columns:
+        companies = companies.rename(columns={"id": "company_id"})
+
+    # ======================================================
+    # Rename Company ID (Sectors table) -- handles the case
+    # where sectors uses "id" instead of "company_id"
+    # ======================================================
+
+    if "company_id" not in sectors.columns:
+        if "id" in sectors.columns:
+            sectors = sectors.rename(columns={"id": "company_id"})
+        else:
+            sectors = sectors.copy()
+            sectors["company_id"] = np.nan
+
+    if "company_id" not in ratios.columns:
+        st.error("Ratios table is missing a 'company_id' column.")
+        st.stop()
+
+    # ======================================================
+    # Merge Tables
+    # ======================================================
+
+    df = (
+        ratios.merge(
+            companies,
+            on="company_id",
+            how="left",
+        )
+        .merge(
+            sectors,
+            on="company_id",
+            how="left",
+        )
+    )
+
+    # ======================================================
+    # Clean Numeric Columns
+    # ======================================================
+
+    numeric_cols = [
+        "return_on_equity_pct",
+        "debt_to_equity",
+        "free_cash_flow_cr",
+        "revenue_cagr_5yr",
+        "pat_cagr_5yr",
+        "operating_profit_margin_pct",
+        "interest_coverage",
+        "composite_quality_score",
+        "index_weight_pct",
+    ]
+
+    for col in numeric_cols:
+        df[col] = num(df, col)
+
+    # ======================================================
+    # Clean Text Columns
+    # ======================================================
+
+    text_cols = [
+        "company_name",
+        "broad_sector",
+        "sub_sector",
+        "market_cap_category",
+    ]
+
+    for col in text_cols:
+        df[col] = text(df, col)
+
+    # ======================================================
+    # Capital Allocation Pattern
+    # ======================================================
+
+    df["Capital Pattern"] = df.apply(
+        classify_company,
+        axis=1,
+    )
+
+    # ======================================================
+    # Remove Duplicate Companies
+    # ======================================================
+
+    if "company_id" in df.columns:
+        df = (
+            df.sort_values(
+                "composite_quality_score",
+                ascending=False,
+            )
+            .drop_duplicates(
+                subset="company_id"
+            )
+            .reset_index(drop=True)
+        )
+    else:
+        df = df.reset_index(drop=True)
+
+    # ======================================================
+    # Market Cap Category
+    # ======================================================
+
+    if "market_cap_category" not in df.columns or df["market_cap_category"].eq("Unknown").all():
+        df["market_cap_category"] = df.get("market_cap_category", "Large Cap")
+        df["market_cap_category"] = df["market_cap_category"].replace("Unknown", "Large Cap")
+
+    # ======================================================
+    # Quick Check
+    # ======================================================
+
+    st.caption(
+        f"Loaded {len(df)} companies | Financial Year : {latest_year}"
+    )
+
+    if df.empty:
+        st.warning("No company data available after merging tables.")
+        st.stop()
+
+    # ======================================================
+    # Sidebar Filters
+    # ======================================================
+
+    st.sidebar.title("🎯 Filters")
+
+    # -----------------------------
+    # Company Search
+    # -----------------------------
+
+    company_search = st.sidebar.text_input(
+        "🔍 Search Company",
+        "",
+        placeholder="Type company name..."
+    )
+
+    # -----------------------------
+    # Pattern Filter
+    # -----------------------------
+
+    pattern_options = ["All"] + sorted(
+        df["Capital Pattern"].dropna().unique().tolist()
+    )
+
+    selected_pattern = st.sidebar.selectbox(
+        "Capital Pattern",
+        pattern_options,
+    )
+
+    # -----------------------------
+    # Sector Filter
+    # -----------------------------
+
+    sector_options = ["All"] + sorted(
+        df["broad_sector"].dropna().unique().tolist()
+    )
+
+    selected_sector = st.sidebar.selectbox(
+        "Sector",
+        sector_options,
+    )
+
+    # -----------------------------
+    # Market Cap Filter
+    # -----------------------------
+
+    market_cap_options = ["All"] + sorted(
+        df["market_cap_category"].dropna().unique().tolist()
+    )
+
+    selected_market_cap = st.sidebar.selectbox(
+        "Market Cap",
+        market_cap_options,
+    )
+
+    st.sidebar.divider()
+
+    st.sidebar.subheader("📊 Financial Filters")
+
+    # -----------------------------
+    # ROE  (default = data minimum -> shows ALL companies until user tightens it)
+    # -----------------------------
+
+    roe_min = safe_slider(
+        "Minimum ROE (%)",
+        df["return_on_equity_pct"],
+        default=float(df["return_on_equity_pct"].min()) if not df["return_on_equity_pct"].empty else 0.0,
+        step=1.0,
+    )
+
+    # -----------------------------
+    # Debt  (default = data maximum -> shows ALL companies until user tightens it)
+    # -----------------------------
+
+    debt_max = safe_slider(
+        "Maximum Debt / Equity",
+        df["debt_to_equity"],
+        default=float(df["debt_to_equity"].max()) if not df["debt_to_equity"].empty else 1.0,
+        step=0.10,
+    )
+
+    # -----------------------------
+    # Revenue CAGR  (default = data minimum -> shows ALL companies until user tightens it)
+    # -----------------------------
+
+    revenue_min = safe_slider(
+        "Minimum Revenue CAGR",
+        df["revenue_cagr_5yr"],
+        default=float(df["revenue_cagr_5yr"].min()) if not df["revenue_cagr_5yr"].empty else 0.0,
+        step=1.0,
+    )
+
+    # -----------------------------
+    # Quality Score  (default = data minimum, NOT median -> median alone would
+    # cut ~50% of companies before the user even touches a filter)
+    # -----------------------------
+
+    quality_min = safe_slider(
+        "Minimum Quality Score",
+        df["composite_quality_score"],
+        default=float(df["composite_quality_score"].min()) if not df["composite_quality_score"].empty else 0.0,
+        step=1.0,
+    )
+
+    # ======================================================
+    # Apply Filters
+    # ======================================================
+
+    filtered = df.copy()
+
+    if company_search:
+        filtered = filtered[
+            filtered["company_name"]
+            .str.contains(company_search, case=False, na=False)
+        ]
+
+    if selected_pattern != "All":
+        filtered = filtered[filtered["Capital Pattern"] == selected_pattern]
+
+    if selected_sector != "All":
+        filtered = filtered[filtered["broad_sector"] == selected_sector]
+
+    if selected_market_cap != "All":
+        filtered = filtered[filtered["market_cap_category"] == selected_market_cap]
+
+    filtered = filtered[filtered["return_on_equity_pct"] >= roe_min]
+    filtered = filtered[filtered["debt_to_equity"] <= debt_max]
+    filtered = filtered[filtered["revenue_cagr_5yr"] >= revenue_min]
+    filtered = filtered[filtered["composite_quality_score"] >= quality_min]
+
+    st.sidebar.success(f"Showing {len(filtered)} Companies")
+
+    if filtered.empty:
+        st.warning("⚠️ No companies match the selected filters. Try widening your filter ranges.")
+        st.stop()
+
+    # ======================================================
+    # Dashboard KPIs
+    # ======================================================
+
+    divider()
+
+    st.subheader("📈 Capital Allocation Overview")
+
+    total_companies = len(filtered)
+    avg_roe = filtered["return_on_equity_pct"].mean()
+    avg_debt = filtered["debt_to_equity"].mean()
+    avg_revenue = filtered["revenue_cagr_5yr"].mean()
+    avg_quality = filtered["composite_quality_score"].mean()
+    avg_fcf = filtered["free_cash_flow_cr"].mean()
+
+    k1, k2, k3 = st.columns(3)
+    k4, k5, k6 = st.columns(3)
+
+    k1.metric("🏢 Companies", f"{total_companies}")
+    k2.metric("📈 Avg ROE", display_value(avg_roe, "%"))
+    k3.metric("💰 Avg Revenue CAGR", display_value(avg_revenue, "%"))
+    k4.metric("🏆 Avg Quality Score", display_value(avg_quality))
+    k5.metric("🏦 Avg Debt / Equity", display_value(avg_debt))
+    k6.metric(
+        "💵 Avg Free Cash Flow",
+        "N/A" if pd.isna(avg_fcf) else f"{avg_fcf:,.0f} Cr",
+    )
+
+    divider()
+
+    # ======================================================
+    # Pattern Summary
+    # ======================================================
+
+    st.subheader("📊 Capital Allocation Summary")
+
+    summary = (
+        filtered
+        .groupby("Capital Pattern")
+        .agg(
+            Companies=("company_id", "count"),
+            Avg_ROE=("return_on_equity_pct", "mean"),
+            Avg_Quality=("composite_quality_score", "mean"),
+            Avg_Revenue=("revenue_cagr_5yr", "mean"),
+        )
+        .reset_index()
+    )
+
+    st.dataframe(summary.fillna("N/A"), use_container_width=True, hide_index=True)
+
+    divider()
+
+    # ======================================================
+    # Top 10 Companies
+    # ======================================================
+
+    st.subheader("🏆 Highest Quality Companies")
+
+    top10 = (
+        filtered
+        .sort_values("composite_quality_score", ascending=False)
+        [[
+            "company_name",
+            "Capital Pattern",
+            "broad_sector",
+            "return_on_equity_pct",
+            "debt_to_equity",
+            "composite_quality_score",
+        ]]
+        .head(10)
+    )
+
+    top10.columns = [
+        "Company",
+        "Pattern",
+        "Sector",
+        "ROE (%)",
+        "Debt",
+        "Quality Score",
+    ]
+
+    st.dataframe(top10.fillna("N/A"), use_container_width=True, hide_index=True)
+
+    divider()
+
+    # ======================================================
+    # Capital Allocation Treemap
+    # ======================================================
+
+    st.subheader("🌳 Capital Allocation Map")
+
+    treemap_df = filtered.copy()
+
+    treemap_df["TreeValue"] = (
+        treemap_df["free_cash_flow_cr"]
+        .abs()
+        .replace(0, np.nan)
+    )
+
+    treemap_df["TreeValue"] = (
+        treemap_df["TreeValue"]
+        .fillna(treemap_df["composite_quality_score"])
+        .replace(0, 1)
+        .fillna(1)
+    )
+
+    fig = px.treemap(
+        treemap_df,
+        path=["Capital Pattern", "company_name"],
+        values="TreeValue",
+        color="composite_quality_score",
+        color_continuous_scale="Viridis",
+        hover_name="company_name",
+        hover_data={
+            "Capital Pattern": False,
+            "TreeValue": False,
+            "return_on_equity_pct": ":.2f",
+            "debt_to_equity": ":.2f",
+            "revenue_cagr_5yr": ":.2f",
+            "free_cash_flow_cr": ":,.0f",
+            "composite_quality_score": ":.2f",
+            "broad_sector": True,
+        },
+    )
+
+    fig.update_traces(
+        textinfo="label",
+        marker=dict(line=dict(color="white", width=1.5)),
+        hovertemplate=(
+            "<b>%{label}</b><br>"
+            "Sector : %{customdata[4]}<br>"
+            "ROE : %{customdata[0]:.2f}%<br>"
+            "Debt/Equity : %{customdata[1]:.2f}<br>"
+            "Revenue CAGR : %{customdata[2]:.2f}%<br>"
+            "Free Cash Flow : %{customdata[3]:,.0f} Cr<br>"
+            "Quality Score : %{color:.2f}"
+            "<extra></extra>"
+        ),
+    )
+
+    fig.update_layout(
+        height=720,
+        margin=dict(t=20, l=5, r=5, b=5),
+        coloraxis_colorbar=dict(title="Quality"),
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    divider()
+
+    # ======================================================
+    # Distribution Charts
+    # ======================================================
+
+    st.subheader("📊 Capital Allocation Analytics")
+
+    col1, col2 = st.columns(2)
+
+    # ------------------------------------------------------
+    # Pattern Distribution
+    # ------------------------------------------------------
+
+    with col1:
+
+        pattern_chart = (
+            filtered
+            .groupby("Capital Pattern")
+            .size()
+            .reset_index(name="Companies")
+            .sort_values("Companies", ascending=False)
+        )
+
+        fig1 = px.bar(
+            pattern_chart,
+            x="Capital Pattern",
+            y="Companies",
+            color="Companies",
+            color_continuous_scale="Viridis",
+            text="Companies",
+        )
+
+        fig1.update_traces(textposition="outside")
+
+        fig1.update_layout(
+            title="Companies by Capital Pattern",
+            xaxis_title="",
+            yaxis_title="Companies",
+            height=450,
+            margin=dict(l=20, r=20, t=40, b=20),
+            showlegend=False,
+        )
+
+        st.plotly_chart(fig1, use_container_width=True)
+
+    # ------------------------------------------------------
+    # Sector Distribution
+    # ------------------------------------------------------
+
+    with col2:
+
+        sector_chart = (
+            filtered
+            .groupby("broad_sector")
+            .size()
+            .reset_index(name="Companies")
+            .sort_values("Companies", ascending=False)
+        )
+
+        fig2 = px.pie(
+            sector_chart,
+            names="broad_sector",
+            values="Companies",
+            hole=0.45,
+            color_discrete_sequence=px.colors.qualitative.Bold,
+        )
+
+        fig2.update_traces(textposition="inside", textinfo="percent+label")
+
+        fig2.update_layout(
+            title="Sector Distribution",
+            height=450,
+            margin=dict(l=20, r=20, t=40, b=20),
+        )
+
+        st.plotly_chart(fig2, use_container_width=True)
+
+    divider()
+
+    # ======================================================
+    # Company Explorer
+    # ======================================================
+
+    st.subheader("🔍 Company Explorer")
+
+    search = st.text_input(
+        "Search Company",
+        placeholder="Type company name...",
+        key="company_explorer_search",
+    )
+
+    company_df = filtered.copy()
+
+    if search:
+        company_df = company_df[
+            company_df["company_name"]
+            .str.contains(search, case=False, na=False)
+        ]
+
+    company_df = company_df.sort_values("composite_quality_score", ascending=False)
+
+    company_table = company_df[
+        [
+            "company_name",
+            "Capital Pattern",
+            "broad_sector",
+            "return_on_equity_pct",
+            "debt_to_equity",
+            "revenue_cagr_5yr",
+            "free_cash_flow_cr",
+            "composite_quality_score",
+        ]
+    ].copy()
+
+    company_table.columns = [
+        "Company",
+        "Pattern",
+        "Sector",
+        "ROE (%)",
+        "Debt/Equity",
+        "Revenue CAGR (%)",
+        "Free Cash Flow (Cr)",
+        "Quality Score",
+    ]
+
+    # ======================================================
+    # Format Numbers
+    # ======================================================
+
+    company_table["ROE (%)"] = company_table["ROE (%)"].round(2)
+    company_table["Debt/Equity"] = company_table["Debt/Equity"].round(2)
+    company_table["Revenue CAGR (%)"] = company_table["Revenue CAGR (%)"].round(2)
+    company_table["Free Cash Flow (Cr)"] = company_table["Free Cash Flow (Cr)"].round(0)
+    company_table["Quality Score"] = company_table["Quality Score"].round(2)
+
+    # ======================================================
+    # Display Table
+    # ======================================================
+
+    st.dataframe(
+        company_table.fillna("N/A"),
+        use_container_width=True,
+        hide_index=True,
+        height=500,
+    )
+
+    st.success(f"{len(company_table)} companies displayed.")
+
+    divider()
+
+    # ======================================================
+    # Top 10 Highest Quality Companies
+    # ======================================================
+
+    st.subheader("🏆 Top 10 Highest Quality Companies")
+
+    top10 = (
+        filtered
+        .sort_values("composite_quality_score", ascending=False)
+        .head(10)
+        .copy()
+    )
+
+    ranking = top10[
+        [
+            "company_name",
+            "Capital Pattern",
+            "return_on_equity_pct",
+            "debt_to_equity",
+            "composite_quality_score",
+        ]
+    ]
+
+    ranking.columns = [
+        "Company",
+        "Pattern",
+        "ROE (%)",
+        "Debt/Equity",
+        "Quality Score",
+    ]
+
+    left, right = st.columns([1.2, 1])
+
+    # -----------------------------------------------------
+    # Ranking Table
+    # -----------------------------------------------------
+
+    with left:
+        st.dataframe(ranking.fillna("N/A"), use_container_width=True, hide_index=True, height=420)
+
+    # -----------------------------------------------------
+    # Horizontal Ranking Chart
+    # -----------------------------------------------------
+
+    with right:
+
+        fig_rank = px.bar(
+            top10,
+            x="composite_quality_score",
+            y="company_name",
+            orientation="h",
+            color="return_on_equity_pct",
+            color_continuous_scale="Viridis",
+            text="composite_quality_score",
+        )
+
+        fig_rank.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+
+        fig_rank.update_layout(
+            title="Quality Score Ranking",
+            xaxis_title="Quality Score",
+            yaxis_title="",
+            height=420,
+            yaxis=dict(autorange="reversed"),
+            coloraxis_colorbar=dict(title="ROE"),
+            margin=dict(t=50, l=10, r=10, b=10),
+        )
+
+        st.plotly_chart(fig_rank, use_container_width=True)
+
+    divider()
+
+    # ======================================================
+    # Best Performing Company
+    # ======================================================
+
+    if not top10.empty:
+        best = top10.iloc[0]
+
+        st.success(
+            f"""
+### 🥇 Best Capital Allocation Company
+
+**{best['company_name']}**
+
+• Pattern : **{best['Capital Pattern']}**
+
+• ROE : **{display_value(best.get('return_on_equity_pct'), '%')}**
+
+• Debt / Equity : **{display_value(best.get('debt_to_equity'))}**
+
+• Quality Score : **{display_value(best.get('composite_quality_score'))}**
+"""
+        )
+
+    divider()
+
+    # ======================================================
+    # Advanced Analytics
+    # ======================================================
+
+    st.subheader("📈 Advanced Capital Allocation Analytics")
+
+    col1, col2 = st.columns(2)
+
+    # ------------------------------------------------------
+    # Sector Average ROE
+    # ------------------------------------------------------
+
+    with col1:
+
+        sector_kpi = (
+            filtered
+            .groupby("broad_sector")
+            .agg(
+                Avg_ROE=("return_on_equity_pct", "mean"),
+                Companies=("company_id", "count"),
+            )
+            .reset_index()
+            .sort_values("Avg_ROE", ascending=False)
+        )
+
+        fig_sector = px.bar(
+            sector_kpi,
+            x="broad_sector",
+            y="Avg_ROE",
+            color="Companies",
+            color_continuous_scale="Viridis",
+            text="Avg_ROE",
+        )
+
+        fig_sector.update_traces(texttemplate="%{text:.1f}", textposition="outside")
+
+        fig_sector.update_layout(
+            title="Average ROE by Sector",
+            xaxis_title="",
+            yaxis_title="ROE (%)",
+            height=450,
+            margin=dict(l=20, r=20, t=40, b=20),
+            showlegend=False,
+        )
+
+        st.plotly_chart(fig_sector, use_container_width=True)
+
+    # ------------------------------------------------------
+    # Pattern Comparison
+    # ------------------------------------------------------
+
+    with col2:
+
+        pattern_stats = (
+            filtered
+            .groupby("Capital Pattern")
+            .agg(
+                Avg_Quality=("composite_quality_score", "mean"),
+                Avg_Debt=("debt_to_equity", "mean"),
+            )
+            .reset_index()
+        )
+
+        pattern_stats["Avg_Quality"] = pattern_stats["Avg_Quality"].fillna(0)
+        pattern_stats["Avg_Debt"] = pattern_stats["Avg_Debt"].fillna(0)
+
+        # size values must be non-negative for plotly
+        pattern_stats["Avg_Quality"] = pattern_stats["Avg_Quality"].clip(lower=0)
+
+        fig_pattern = px.scatter(
+            pattern_stats,
+            x="Avg_Debt",
+            y="Avg_Quality",
+            size="Avg_Quality",
+            color="Capital Pattern",
+            text="Capital Pattern",
+        )
+
+        fig_pattern.update_traces(textposition="top center")
+
+        fig_pattern.update_layout(
+            title="Quality vs Debt",
+            xaxis_title="Average Debt / Equity",
+            yaxis_title="Average Quality Score",
+            height=450,
+            margin=dict(l=20, r=20, t=40, b=20),
+        )
+
+        st.plotly_chart(fig_pattern, use_container_width=True)
+
+    divider()
+
+    # ======================================================
+    # Pattern Statistics
+    # ======================================================
+
+    st.subheader("📋 Pattern Statistics")
+
+    stats = (
+        filtered
+        .groupby("Capital Pattern")
+        .agg(
+            Companies=("company_id", "count"),
+            Avg_ROE=("return_on_equity_pct", "mean"),
+            Avg_Debt=("debt_to_equity", "mean"),
+            Avg_Revenue=("revenue_cagr_5yr", "mean"),
+            Avg_Quality=("composite_quality_score", "mean"),
+        )
+        .reset_index()
+    )
+
+    stats.columns = [
+        "Pattern",
+        "Companies",
+        "Average ROE",
+        "Average Debt",
+        "Average Revenue CAGR",
+        "Average Quality",
+    ]
+
+    st.dataframe(stats.round(2).fillna("N/A"), use_container_width=True, hide_index=True)
+
+    divider()
+
+    # ======================================================
+    # Download Results
+    # ======================================================
+
+    st.subheader("📥 Export Results")
+
+    export_df = company_table.copy()
+
+    csv = export_df.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="📥 Download Company List (CSV)",
+        data=csv,
+        file_name="capital_allocation_map.csv",
+        mime="text/csv",
+        use_container_width=True,
+    )
+
+    divider()
+
+    # ======================================================
+    # Dashboard Summary
+    # ======================================================
+
+    st.subheader("📌 Dashboard Summary")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric("Companies", len(filtered))
+    c2.metric("Patterns", filtered["Capital Pattern"].nunique())
+    c3.metric("Sectors", filtered["broad_sector"].nunique())
+    c4.metric("Latest Year", latest_year)
+
+    divider()
+
+    # ======================================================
+    # Dataset Information
+    # ======================================================
+
+    with st.expander("ℹ Dataset Information", expanded=False):
+
+        st.markdown(
+            f"""
+### Financial Year
+
+**{latest_year}**
+
+### Database Tables Used
+
+- Companies
+- Financial Ratios
+- Sectors
+
+### Total Records
+
+- Companies Loaded : **{len(df)}**
+- Companies Displayed : **{len(filtered)}**
+
+### Capital Allocation Patterns
+
+- High Quality
+- Growth Focus
+- Cash Generator
+- Debt Free
+- Capital Efficient
+- Highly Leveraged
+- Turnaround
+- Balanced
+
+### Metrics Used
+
+- Return on Equity
+- Debt / Equity
+- Revenue CAGR
+- Free Cash Flow
+- Composite Quality Score
+
+### Dashboard
+
+Sprint 4 • Day 25
+"""
+        )
+
+    divider()
+
+    # ======================================================
+    # Footer
+    # ======================================================
+
+    st.caption(
+        "📊 N100 Financial Analytics Dashboard "
+    )
+
+
+if __name__ == "__main__":
+    show()
+    
+# home.py
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+
+from utils.db import (
+    get_companies,
+    get_ratios,
+    get_sectors,
+)
+from utils.theme import page_header
+
+
+def section_header(text: str):
+    """Small helper so subheaders animate in with a slight stagger."""
+    st.markdown(f"### {text}")
+
+
+def show():
+
+    page_header(
+        "🏠",
+        "Nifty 100 Analytics Dashboard",
+        "A quick pulse check across the Nifty 100 universe — quality, valuation and growth at a glance.",
+    )
+
+    companies = get_companies()
+    ratios = get_ratios()
+    sectors = get_sectors()
+
+    # -------------------------
+    # Sidebar Year Filter
+    # -------------------------
+
+    ratios["calendar_year"] = (
+    ratios["year"]
+    .str[-4:]
+    .astype(int)
+)
+
+    years = sorted(
+        ratios["calendar_year"].unique(),
+        reverse=True,
+    )
+
+    selected_year = st.sidebar.selectbox(
+        "Select Year",
+        years,
+    )
+
+    ratios = ratios[
+        ratios["calendar_year"] == selected_year
+    ]
+
+    # -------------------------
+    # Merge Data
+    # -------------------------
+
+    companies = companies.rename(columns={"id": "company_id"})
+
+    df = ratios.merge(
+        companies,
+        on="company_id",
+        how="left",
+    )
+
+    df = df.merge(
+        sectors,
+        on="company_id",
+        how="left",
+    )
+
+    # -------------------------
+    # KPI Cards
+    # -------------------------
+
+    section_header("Summary")
+
+    c1, c2, c3 = st.columns(3)
+    c4, c5, c6 = st.columns(3)
+
+    c1.metric(
+        "Average ROE",
+        f"{df['return_on_equity_pct'].mean():.2f}%"
+    )
+
+    c2.metric(
+        "Median P/E",
+        "Coming Day 26"
+    )
+
+    c3.metric(
+        "Median D/E",
+        f"{df['debt_to_equity'].median():.2f}"
+    )
+
+    c4.metric(
+        "Total Companies",
+        len(companies)
+    )
+
+    c5.metric(
+        "Median Revenue CAGR",
+        f"{df['revenue_cagr_5yr'].median():.2f}%"
+    )
+
+    c6.metric(
+        "Debt-Free Companies",
+        int((df["debt_to_equity"] <= 0.10).sum())
+    )
+
+    st.divider()
+
+    # -------------------------
+    # Charts
+    # -------------------------
+
+    left, right = st.columns(2)
+
+    with left:
+
+        section_header("Sector Breakdown")
+
+        sector_df = (
+            df.groupby("broad_sector")
+            .size()
+            .reset_index(name="Companies")
+        )
+
+        fig = px.pie(
+            sector_df,
+            names="broad_sector",
+            values="Companies",
+            hole=0.45,
+            color_discrete_sequence=px.colors.sequential.Sunsetdark,
+        )
+
+        fig.update_traces(
+            textposition="inside",
+            textinfo="percent+label",
+            pull=[0.03] * len(sector_df),
+            marker=dict(line=dict(color="#ffffff", width=2)),
+        )
+
+        fig.update_layout(
+            margin=dict(t=10, b=10, l=10, r=10),
+            legend=dict(orientation="h", yanchor="bottom", y=-0.2),
+            transition=dict(duration=500, easing="cubic-in-out"),
+        )
+
+        st.plotly_chart(
+            fig,
+            use_container_width=True,
+        )
+
+    with right:
+
+        section_header("Top 5 Quality Companies")
+
+        top5 = (
+            df.sort_values(
+                "composite_quality_score",
+                ascending=False,
+            )
+            .head(5)[
+                [
+                    "company_name",
+                    "return_on_equity_pct",
+                    "debt_to_equity",
+                    "composite_quality_score",
+                ]
+            ]
+        )
+
+        try:
+            styled_top5 = top5.style.background_gradient(
+                subset=["composite_quality_score"],
+                cmap="Purples",
+            )
+        except Exception:
+            # matplotlib not installed, or gradient styling failed -
+            # fall back to a plain (unstyled) table instead of crashing.
+            styled_top5 = top5
+
+        st.dataframe(
+            styled_top5,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+# peers.py
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+
+from utils.db import (
+    get_companies,
+    get_ratios,
+    get_peers,
+)
+from utils.theme import page_header
+
+
+def styled_divider():
+    """Thin gradient divider, replacing plain st.markdown('---')."""
+    st.markdown("<hr/>", unsafe_allow_html=True)
+
+
+# =====================================================
+# Safe Helper
+# =====================================================
+
+def safe_series(df, column, default=0):
+
+    if column not in df.columns:
+        return pd.Series(
+            [default] * len(df)
+        )
+
+    return df[column].fillna(default)
+
+
+# =====================================================
+# Peer Comparison Screen
+# =====================================================
+
+def show():
+
+    page_header(
+        "👥",
+        "Peer Comparison",
+        "Benchmark a company against its closest sector peers, side by side.",
+    )
+
+    # -------------------------------------------------
+    # Load Database
+    # -------------------------------------------------
+
+    companies = get_companies()
+
+    ratios = get_ratios()
+
+    peers = get_peers()
+
+    if companies.empty:
+
+        st.warning("Company data not available.")
+
+        st.stop()
+
+    if ratios.empty:
+
+        st.warning("Financial ratio data not available.")
+
+        st.stop()
+
+    if peers.empty:
+
+        st.warning("Peer group data not available.")
+
+        st.stop()
+
+    # -------------------------------------------------
+    # IMPORTANT FIX
+    # Get latest financial record FOR EACH COMPANY
+    # -------------------------------------------------
+
+    ratios["year_dt"] = pd.to_datetime(
+
+        ratios["year"],
+
+        format="%b %Y",
+
+        errors="coerce",
+
+    )
+
+    ratios = (
+
+        ratios
+
+        .sort_values("year_dt")
+
+        .groupby("company_id", as_index=False)
+
+        .tail(1)
+
+        .drop(columns="year_dt")
+
+    )
+
+    # -------------------------------------------------
+    # Add Company Name into Ratios
+    # -------------------------------------------------
+
+    ratios = ratios.merge(
+
+        companies[
+            [
+                "id",
+                "company_name",
+            ]
+        ],
+
+        left_on="company_id",
+
+        right_on="id",
+
+        how="left",
+
+    )
+
+    ratios = ratios.drop(
+        columns=["id"],
+        errors="ignore",
+    )
+
+    # -------------------------------------------------
+    # Add Company Name into Peers
+    # -------------------------------------------------
+
+    peers = peers.merge(
+
+        companies[
+            [
+                "id",
+                "company_name",
+            ]
+        ],
+
+        left_on="company_id",
+
+        right_on="id",
+
+        how="left",
+
+        suffixes=("", "_drop"),
+
+    )
+
+    peers = peers.drop(
+        columns=["id"],
+        errors="ignore",
+    )
+
+        # =====================================================
+    # Peer Group Selection
+    # =====================================================
+
+    peer_groups = sorted(
+        peers["peer_group_name"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_group = st.selectbox(
+        "Select Peer Group",
+        peer_groups,
+    )
+
+    group_df = peers[
+        peers["peer_group_name"] == selected_group
+    ].copy()
+
+    if group_df.empty:
+
+        st.warning(
+            "No companies found in this peer group."
+        )
+
+        st.stop()
+
+    # =====================================================
+    # Company Selection
+    # =====================================================
+
+    company_list = sorted(
+        group_df["company_name"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_company = st.selectbox(
+        "Select Company",
+        company_list,
+    )
+
+    # =====================================================
+    # Benchmark Company
+    # =====================================================
+
+    benchmark_name = None
+
+    benchmark = group_df[
+        group_df["is_benchmark"] == 1
+    ]
+
+    if not benchmark.empty:
+
+        benchmark_name = benchmark.iloc[0][
+            "company_name"
+        ]
+
+        st.success(
+            f"🏆 Benchmark Company: {benchmark_name}"
+        )
+
+    # =====================================================
+    # Merge Peer Companies with Latest Ratios
+    # =====================================================
+
+    compare_df = group_df.merge(
+
+        ratios,
+
+        on="company_id",
+
+        how="left",
+
+        suffixes=("", "_ratio"),
+
+    )
+
+    # =====================================================
+    # Fill Missing Values
+    # =====================================================
+
+    metric_columns = [
+
+        "return_on_equity_pct",
+
+        "operating_profit_margin_pct",
+
+        "net_profit_margin_pct",
+
+        "debt_to_equity",
+
+        "interest_coverage",
+
+        "free_cash_flow_cr",
+
+        "revenue_cagr_5yr",
+
+        "composite_quality_score",
+
+    ]
+
+    for column in metric_columns:
+
+        compare_df[column] = safe_series(
+            compare_df,
+            column,
+        )
+
+    # =====================================================
+    # Selected Company
+    # =====================================================
+
+    selected = compare_df[
+        compare_df["company_name"] == selected_company
+    ]
+
+    if selected.empty:
+
+        st.warning(
+            "Selected company data not available."
+        )
+
+        st.stop()
+
+    selected = selected.iloc[0]
+
+    # =====================================================
+    # Peer Average
+    # =====================================================
+
+    peer_average = compare_df[
+        metric_columns
+    ].mean()
+
+        # =====================================================
+    # Radar Chart
+    # =====================================================
+
+    styled_divider()
+
+    st.subheader("📊 Company vs Peer Average")
+
+    radar_metrics = [
+
+        "return_on_equity_pct",
+
+        "operating_profit_margin_pct",
+
+        "net_profit_margin_pct",
+
+        "interest_coverage",
+
+        "revenue_cagr_5yr",
+
+        "free_cash_flow_cr",
+
+        "debt_to_equity",
+
+        "composite_quality_score",
+
+    ]
+
+    radar_labels = [
+
+        "ROE",
+
+        "OPM",
+
+        "Net Margin",
+
+        "Interest Cover",
+
+        "Revenue CAGR",
+
+        "Free Cash Flow",
+
+        "Debt / Equity",
+
+        "Quality Score",
+
+    ]
+
+    company_values = []
+
+    peer_values = []
+
+    for metric in radar_metrics:
+
+        company_values.append(
+            float(selected[metric])
+        )
+
+        peer_values.append(
+            float(peer_average[metric])
+        )
+
+    # Close polygon
+
+    company_values.append(company_values[0])
+
+    peer_values.append(peer_values[0])
+
+    radar_labels_closed = radar_labels.copy()
+
+    radar_labels_closed.append(
+        radar_labels[0]
+    )
+
+    radar_chart = go.Figure()
+
+    radar_chart.add_trace(
+
+        go.Scatterpolar(
+
+            r=company_values,
+
+            theta=radar_labels_closed,
+
+            fill="toself",
+
+            name=selected_company,
+
+            line=dict(width=3, color="#6C63FF"),
+
+            fillcolor="rgba(108,99,255,0.25)",
+
+        )
+
+    )
+
+    radar_chart.add_trace(
+
+        go.Scatterpolar(
+
+            r=peer_values,
+
+            theta=radar_labels_closed,
+
+            fill="toself",
+
+            name="Peer Average",
+
+            line=dict(width=3, color="#FF6B9D"),
+
+            fillcolor="rgba(255,107,157,0.20)",
+
+        )
+
+    )
+
+    radar_chart.update_layout(
+
+        title=f"{selected_company} vs Peer Average",
+
+        height=650,
+
+        showlegend=True,
+
+        legend=dict(orientation="h", yanchor="bottom", y=-0.15),
+
+        margin=dict(t=60, b=20, l=40, r=40),
+
+        polar=dict(
+
+            bgcolor="rgba(108,99,255,0.03)",
+
+            radialaxis=dict(
+
+                visible=True,
+
+                showline=True,
+
+                gridcolor="rgba(108,99,255,0.15)",
+
+            ),
+
+            angularaxis=dict(
+                gridcolor="rgba(108,99,255,0.15)",
+            ),
+
+        ),
+
+    )
+
+    st.plotly_chart(
+
+        radar_chart,
+
+        use_container_width=True,
+
+    )
+
+    # =====================================================
+    # Quick KPI Cards
+    # =====================================================
+
+    styled_divider()
+
+    st.subheader("📈 Selected Company Snapshot")
+
+    c1, c2, c3, c4 = st.columns(4)
+
+    c1.metric(
+        "ROE",
+        f"{selected['return_on_equity_pct']:.2f}%"
+    )
+
+    c2.metric(
+        "Revenue CAGR",
+        f"{selected['revenue_cagr_5yr']:.2f}%"
+    )
+
+    c3.metric(
+        "Debt / Equity",
+        f"{selected['debt_to_equity']:.2f}"
+    )
+
+    c4.metric(
+        "Quality Score",
+        f"{selected['composite_quality_score']:.2f}"
+    )
+
+        # =====================================================
+    # Peer Comparison Table
+    # =====================================================
+
+    styled_divider()
+
+    st.subheader("📋 Peer Comparison Table")
+
+    table = compare_df[
+        [
+            "company_name",
+            "return_on_equity_pct",
+            "operating_profit_margin_pct",
+            "net_profit_margin_pct",
+            "debt_to_equity",
+            "interest_coverage",
+            "revenue_cagr_5yr",
+            "free_cash_flow_cr",
+            "composite_quality_score",
+            "is_benchmark",
+        ]
+    ].copy()
+
+    table = table.rename(
+        columns={
+            "company_name": "Company",
+            "return_on_equity_pct": "ROE (%)",
+            "operating_profit_margin_pct": "OPM (%)",
+            "net_profit_margin_pct": "Net Margin (%)",
+            "debt_to_equity": "Debt / Equity",
+            "interest_coverage": "Interest Coverage",
+            "revenue_cagr_5yr": "Revenue CAGR (%)",
+            "free_cash_flow_cr": "FCF (Cr)",
+            "composite_quality_score": "Quality Score",
+        }
+    )
+
+    # Hide helper column from display
+    display_table = table.drop(
+        columns=["is_benchmark"]
+)
+
+    # -----------------------------------------------------
+    # Highlight Benchmark Row
+    # -----------------------------------------------------
+
+    def highlight_benchmark(row):
+
+        if row["is_benchmark"] == 1:
+
+            return [
+                "background-color:#d4edda; font-weight:bold;"
+            ] * len(row)
+
+        return [""] * len(row)
+
+    styled_table = (
+
+    display_table.style
+
+    .apply(
+
+        lambda row: (
+            ["background-color:#d4edda; font-weight:bold;"] * len(row)
+            if table.loc[row.name, "is_benchmark"] == 1
+            else [""] * len(row)
+        ),
+
+        axis=1,
+
+    )
+
+    .format(
+        {
+            "ROE (%)": "{:.2f}",
+            "OPM (%)": "{:.2f}",
+            "Net Margin (%)": "{:.2f}",
+            "Debt / Equity": "{:.2f}",
+            "Interest Coverage": "{:.2f}",
+            "Revenue CAGR (%)": "{:.2f}",
+            "FCF (Cr)": "{:.2f}",
+            "Quality Score": "{:.2f}",
+        }
+    )
+
+)
+
+    st.dataframe(
+
+        styled_table,
+
+        use_container_width=True,
+
+        hide_index=True,
+
+    )
+
+    # -----------------------------------------------------
+    # Remove helper column for download
+    # -----------------------------------------------------
+
+    download_table = display_table.copy()
+
+    # -----------------------------------------------------
+    # Statistics
+    # -----------------------------------------------------
+
+    styled_divider()
+
+    st.subheader("📊 Peer Statistics")
+
+    s1, s2, s3 = st.columns(3)
+
+    s1.metric(
+        "Companies",
+        len(download_table)
+    )
+
+    s2.metric(
+        "Average ROE",
+        f"{download_table['ROE (%)'].mean():.2f}%"
+    )
+
+    s3.metric(
+        "Average Quality Score",
+        f"{download_table['Quality Score'].mean():.2f}"
+    )
+
+        # =====================================================
+    # Download CSV
+    # =====================================================
+
+    styled_divider()
+
+    csv = download_table.to_csv(
+        index=False
+    ).encode("utf-8")
+
+    st.download_button(
+
+        label="📥 Download Peer Comparison CSV",
+
+        data=csv,
+
+        file_name=f"{selected_group}_peer_comparison.csv",
+
+        mime="text/csv",
+
+    )
+
+    # =====================================================
+    # Benchmark Summary
+    # =====================================================
+
+    styled_divider()
+
+    st.subheader("🏆 Benchmark Company")
+
+    if benchmark_name is not None:
+
+        benchmark_data = compare_df[
+            compare_df["company_name"] == benchmark_name
+        ]
+
+        if not benchmark_data.empty:
+
+            benchmark_data = benchmark_data.iloc[0]
+
+            b1, b2, b3, b4 = st.columns(4)
+
+            b1.metric(
+                "Benchmark",
+                benchmark_name,
+            )
+
+            b2.metric(
+                "ROE",
+                f"{benchmark_data['return_on_equity_pct']:.2f}%"
+            )
+
+            b3.metric(
+                "Revenue CAGR",
+                f"{benchmark_data['revenue_cagr_5yr']:.2f}%"
+            )
+
+            b4.metric(
+                "Quality Score",
+                f"{benchmark_data['composite_quality_score']:.2f}"
+            )
+
+    else:
+
+        st.info(
+            "No benchmark company available for this peer group."
+        )
+
+    # =====================================================
+    # Dataset Summary
+    # =====================================================
+
+    styled_divider()
+
+    with st.expander("📊 Dataset Summary"):
+
+        st.write(
+            f"**Peer Group:** {selected_group}"
+        )
+
+        st.write(
+            f"**Companies:** {len(compare_df)}"
+        )
+
+        st.write(
+            "**Metrics Used:**"
+        )
+
+        st.markdown("""
+
+- Return on Equity (ROE)
+
+- Operating Profit Margin (OPM)
+
+- Net Profit Margin
+
+- Debt / Equity
+
+- Interest Coverage
+
+- Revenue CAGR (5Y)
+
+- Free Cash Flow
+
+- Composite Quality Score
+
+""")
+
+    # =====================================================
+    # Footer
+    # =====================================================
+
+    styled_divider()
+
+    st.caption(
+            "📊 N100 Financial Analytics Dashboard "
+        )
+
+# profile.py
+import time
+
+import streamlit as st
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pandas as pd
+
+from utils.db import (
+    get_companies,
+    get_ratios,
+    get_pl,
+    get_bs,
+    get_cf,
+    get_sectors,
+)
+from utils.theme import page_header
+from utils.helpers import display_value
+
+
+def styled_divider():
+    st.markdown("<hr/>", unsafe_allow_html=True)
+
+
+# -------------------------------------------------------
+# Safe Helper
+# -------------------------------------------------------
+def safe_value(value, default=0):
+    """Return default when value is None or NaN."""
+    if value is None:
+        return default
+
+    if pd.isna(value):
+        return default
+
+    return value
+
+
+# -------------------------------------------------------
+# Company Profile Page
+# -------------------------------------------------------
+def show():
+
+    page_header(
+        "🏢",
+        "Company Profile",
+        "Deep-dive into a single company's fundamentals, ratios and history.",
+    )
+
+    # ---------------------------------------------------
+    # Load Companies
+    # ---------------------------------------------------
+    companies = get_companies()
+
+    if companies.empty:
+        st.error("Company database not found.")
+        st.stop()
+
+    # ---------------------------------------------------
+    # Search by Ticker (id) OR Company Name.
+    #
+    # Streamlit's selectbox filters its options list against
+    # whatever format_func renders, so typing "TCS" matches the
+    # "Tata Consultancy Services Ltd (TCS)" option even though the
+    # underlying value passed around is just the ticker id. This
+    # replaces the old company_name-only dropdown, which had no way
+    # to match on ticker at all.
+    # ---------------------------------------------------
+
+    company_ids = (
+        companies["id"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    def format_company_option(company_id):
+        row = companies.loc[companies["id"] == company_id]
+
+        if row.empty:
+            return company_id
+
+        name = row["company_name"].iloc[0]
+        return f"{name} ({company_id})"
+
+    company_ids_sorted = sorted(
+        company_ids,
+        key=lambda cid: format_company_option(cid),
+    )
+
+    selected_id = st.selectbox(
+        "🔍 Search Company / Ticker",
+        company_ids_sorted,
+        format_func=format_company_option,
+    )
+
+    company_rows = companies[
+        companies["id"] == selected_id
+    ]
+
+    if company_rows.empty:
+        st.warning(
+            "Ticker not found — please try another."
+        )
+        st.stop()
+
+    company = company_rows.iloc[0]
+
+    company_id = company["id"]
+    selected_company = company["company_name"]
+
+    # ---------------------------------------------------
+    # Load Database Tables
+    # ---------------------------------------------------
+    ratios = get_ratios(company_id)
+    pl = get_pl(company_id)
+    bs = get_bs(company_id)
+    cf = get_cf(company_id)
+    sectors = get_sectors()
+
+    sector = sectors[
+        sectors["company_id"] == company_id
+    ]
+
+    # ---------------------------------------------------
+    # Data Available Indicator
+    # ---------------------------------------------------
+
+    if not ratios.empty:
+
+        available_years = len(ratios)
+
+        st.info(
+            f"📅 Data Available: {available_years} Financial Years"
+        )
+
+        if available_years < 10:
+
+            st.warning(
+                f"Only {available_years} years of financial data are available."
+            )
+
+    # ---------------------------------------------------
+    # Validate Required Data
+    # ---------------------------------------------------
+    if ratios.empty:
+        st.warning(
+            "Financial Ratio data not available."
+        )
+        st.stop()
+
+    if pl.empty:
+        st.warning(
+            "Profit & Loss data not available."
+        )
+        st.stop()
+
+    latest = ratios.sort_values(
+        "year"
+    ).iloc[-1]
+
+    # ---------------------------------------------------
+    # Safe Variables
+    # ---------------------------------------------------
+    roe_raw = latest.get("return_on_equity_pct")
+    roe = safe_value(roe_raw)
+
+    roce_raw = company.get("roce_percentage")
+    roce = safe_value(roce_raw)
+
+    npm_raw = latest.get("net_profit_margin_pct")
+    npm = safe_value(npm_raw)
+
+    debt_raw = latest.get("debt_to_equity")
+    debt = safe_value(debt_raw)
+
+    revenue_cagr_raw = latest.get("revenue_cagr_5yr")
+    revenue_cagr = safe_value(revenue_cagr_raw)
+
+    pat_cagr = safe_value(
+        latest.get("pat_cagr_5yr")
+    )
+
+    eps_cagr = safe_value(
+        latest.get("eps_cagr_5yr")
+    )
+
+    interest = safe_value(
+        latest.get("interest_coverage")
+    )
+
+    fcf_raw = latest.get("free_cash_flow_cr")
+    fcf = safe_value(fcf_raw)
+
+    quality_raw = latest.get("composite_quality_score")
+    quality = safe_value(quality_raw)
+
+    # ==========================================================
+    # Company Information
+    # ==========================================================
+
+    styled_divider()
+
+    # ---------------------------------------------------
+    # Sector / Company / Ticker info strip
+    #
+    # Placed immediately below the page title, matching the layout
+    # used by dashboards like Screener and Tickertape. Ticker uses
+    # company["id"] (the internal id already used for lookups)
+    # rather than chart_link, so it's guaranteed to match whatever
+    # was just searched/selected above.
+    # ---------------------------------------------------
+
+    sector_name = "N/A"
+    sub_sector = "N/A"
+
+    if not sector.empty:
+        sector_name = sector.iloc[0]["broad_sector"]
+        sub_sector = sector.iloc[0]["sub_sector"]
+
+    strip_col1, strip_col2, strip_col3 = st.columns(3)
+
+    strip_col1.info(f"**Sector**\n\n{sector_name}")
+    strip_col2.info(f"**Company**\n\n{company['company_name']}")
+    strip_col3.info(f"**Ticker**\n\n{company['id']}")
+
+    styled_divider()
+
+    info_col, sector_col = st.columns([2, 1])
+
+    with info_col:
+
+        st.subheader(company["company_name"])
+
+        about = company.get("about_company")
+
+        if pd.notna(about):
+            st.write(about)
+        else:
+            st.info("N/A")
+
+        website = company.get("website")
+
+        if pd.isna(website):
+            st.write("🌐 **Website:** N/A")
+        else:
+            st.write(f"🌐 **Website:** {website}")
+
+        face_value_raw = company.get("face_value")
+        book_value_raw = company.get("book_value")
+
+        face_value_text = (
+            "N/A"
+            if face_value_raw is None or pd.isna(face_value_raw)
+            else f"₹{face_value_raw}"
+        )
+        book_value_text = (
+            "N/A"
+            if book_value_raw is None or pd.isna(book_value_raw)
+            else f"₹{book_value_raw}"
+        )
+
+        st.write(f"💰 **Face Value:** {face_value_text}")
+
+        st.write(f"📚 **Book Value:** {book_value_text}")
+
+    with sector_col:
+
+        st.subheader("Sector Information")
+
+        if not sector.empty:
+
+            sector_row = sector.iloc[0]
+
+            st.write(
+                f"**Sector:** {sector_row['broad_sector']}"
+            )
+
+            st.write(
+                f"**Sub Sector:** {sector_row['sub_sector']}"
+            )
+
+            index_weight_raw = sector_row.get("index_weight_pct")
+
+            st.write(
+                f"**Index Weight:** {display_value(index_weight_raw, '%')}"
+            )
+
+            market_cap = sector_row.get(
+                "market_cap_category"
+            )
+
+            if pd.notna(market_cap):
+                st.write(
+                    f"**Market Cap:** {market_cap}"
+                )
+
+        else:
+
+            st.info(
+                "Sector information not available."
+            )
+
+    # ==========================================================
+    # KPI Cards
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Key Financial Metrics")
+
+    row1 = st.columns(3)
+    row2 = st.columns(3)
+
+    row1[0].metric(
+        "ROE",
+        display_value(roe_raw, "%")
+    )
+
+    row1[1].metric(
+        "ROCE",
+        display_value(roce_raw, "%")
+    )
+
+    row1[2].metric(
+        "Net Profit Margin",
+        display_value(npm_raw, "%")
+    )
+
+    row2[0].metric(
+        "Debt / Equity",
+        display_value(debt_raw)
+    )
+
+    row2[1].metric(
+        "Revenue CAGR (5Y)",
+        display_value(revenue_cagr_raw, "%")
+    )
+
+    fcf_text = (
+        "N/A"
+        if fcf_raw is None or pd.isna(fcf_raw)
+        else f"₹{fcf_raw:.2f} Cr"
+    )
+
+    row2[2].metric(
+        "Free Cash Flow",
+        fcf_text
+    )
+
+    st.metric(
+        "Composite Quality Score",
+        display_value(quality_raw)
+    )
+
+    # ==========================================================
+    # Revenue vs Net Profit Chart (animated)
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Revenue vs Net Profit (10 Years)")
+
+    if not pl.empty:
+
+        chart_df = pl.copy()
+
+        chart_df["sales"] = chart_df["sales"].fillna(0)
+        chart_df["net_profit"] = chart_df["net_profit"].fillna(0)
+
+        years = chart_df["year"].tolist()
+        sales_final = chart_df["sales"].tolist()
+        profit_final = chart_df["net_profit"].tolist()
+
+        max_val = max(sales_final + profit_final)
+        y_axis_max = max_val * 1.15 if max_val > 0 else 1
+
+        def build_revenue_fig(sales_vals, profit_vals):
+            fig = go.Figure()
+
+            fig.add_trace(
+                go.Bar(
+                    x=years,
+                    y=sales_vals,
+                    name="sales",
+                    marker_color="#6C63FF",
+                )
+            )
+
+            fig.add_trace(
+                go.Bar(
+                    x=years,
+                    y=profit_vals,
+                    name="net_profit",
+                    marker_color="#FF6B9D",
+                )
+            )
+
+            fig.update_layout(
+                title="Revenue vs Net Profit",
+                barmode="group",
+                height=500,
+                margin=dict(l=20, r=20, t=40, b=20),
+                xaxis_title="Financial Year",
+                yaxis_title="₹ Crore",
+                legend_title="Metric",
+                yaxis=dict(range=[0, y_axis_max]),
+                transition=dict(duration=0),
+            )
+
+            return fig
+
+        revenue_placeholder = st.empty()
+
+        replay_col_rev, _ = st.columns([1, 5])
+        play_revenue = replay_col_rev.button(
+            "▶ Play Animation",
+            key="revenue_play_btn",
+        )
+
+        if "revenue_animated_once" not in st.session_state:
+            st.session_state.revenue_animated_once = False
+
+        def animate_revenue():
+            n_frames = 24
+            for i in range(1, n_frames + 1):
+                t = i / n_frames
+                eased_t = 1 - (1 - t) ** 3  # ease-out cubic
+
+                frame_sales = [v * eased_t for v in sales_final]
+                frame_profit = [v * eased_t for v in profit_final]
+
+                fig = build_revenue_fig(frame_sales, frame_profit)
+
+                revenue_placeholder.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    key=f"revenue_frame_{i}",
+                )
+
+                time.sleep(0.02)
+
+            st.session_state.revenue_animated_once = True
+
+        if play_revenue or not st.session_state.revenue_animated_once:
+            animate_revenue()
+        else:
+            final_fig = build_revenue_fig(sales_final, profit_final)
+            revenue_placeholder.plotly_chart(
+                final_fig,
+                use_container_width=True,
+                key="revenue_final",
+            )
+
+    else:
+
+        st.info("Revenue data not available.")
+
+    # ==========================================================
+    # ROE vs ROCE Trend (animated)
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("ROE vs ROCE Trend")
+
+    if not ratios.empty:
+
+        trend_df = ratios.copy()
+
+        trend_df["return_on_equity_pct"] = (
+            trend_df["return_on_equity_pct"]
+            .fillna(0)
+        )
+
+        trend_years = trend_df["year"].tolist()
+        roe_final = trend_df["return_on_equity_pct"].tolist()
+        roce_final = [roce] * len(trend_df)
+
+        def build_trend_fig(n_points):
+            fig = make_subplots(
+                specs=[[{"secondary_y": True}]]
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=trend_years[:n_points],
+                    y=roe_final[:n_points],
+                    mode="lines+markers",
+                    name="ROE",
+                    line=dict(color="#6C63FF", width=3),
+                ),
+                secondary_y=False,
+            )
+
+            fig.add_trace(
+                go.Scatter(
+                    x=trend_years[:n_points],
+                    y=roce_final[:n_points],
+                    mode="lines+markers",
+                    name="ROCE",
+                    line=dict(color="#FF6B9D", width=3),
+                ),
+                secondary_y=True,
+            )
+
+            fig.update_layout(
+                height=500,
+                margin=dict(l=20, r=20, t=40, b=20),
+                legend_title="Metric",
+                transition=dict(duration=0),
+            )
+
+            fig.update_xaxes(
+                title_text="Financial Year",
+                range=[trend_years[0], trend_years[-1]],
+            )
+
+            roe_max = max(roe_final) * 1.15 if max(roe_final) > 0 else 1
+            roce_max = max(roce_final) * 1.15 if max(roce_final) > 0 else 1
+
+            fig.update_yaxes(
+                title_text="ROE (%)",
+                secondary_y=False,
+                range=[0, roe_max],
+            )
+
+            fig.update_yaxes(
+                title_text="ROCE (%)",
+                secondary_y=True,
+                range=[0, roce_max],
+            )
+
+            return fig
+
+        trend_placeholder = st.empty()
+
+        replay_col_trend, _ = st.columns([1, 5])
+        play_trend = replay_col_trend.button(
+            "▶ Play Animation",
+            key="trend_play_btn",
+        )
+
+        if "trend_animated_once" not in st.session_state:
+            st.session_state.trend_animated_once = False
+
+        def animate_trend():
+            total_points = len(trend_years)
+
+            for n_points in range(1, total_points + 1):
+                fig = build_trend_fig(n_points)
+
+                trend_placeholder.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    key=f"trend_frame_{n_points}",
+                )
+
+                time.sleep(0.08)
+
+            st.session_state.trend_animated_once = True
+
+        if play_trend or not st.session_state.trend_animated_once:
+            animate_trend()
+        else:
+            final_fig = build_trend_fig(len(trend_years))
+            trend_placeholder.plotly_chart(
+                final_fig,
+                use_container_width=True,
+                key="trend_final",
+            )
+
+    else:
+
+        st.info("ROE trend data not available.")
+
+    # ==========================================================
+    # Pros & Cons
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Pros & Cons")
+
+    pros_col, cons_col = st.columns(2)
+
+    with pros_col:
+
+        st.success("Pros")
+
+        pros = []
+
+        if roe >= 15:
+            pros.append("✅ Strong Return on Equity")
+
+        if revenue_cagr >= 10:
+            pros.append("✅ Healthy Revenue Growth")
+
+        if pat_cagr >= 10:
+            pros.append("✅ Strong PAT Growth")
+
+        if eps_cagr >= 10:
+            pros.append("✅ Strong EPS Growth")
+
+        if debt <= 0.50:
+            pros.append("✅ Low Debt")
+
+        if fcf > 0:
+            pros.append("✅ Positive Free Cash Flow")
+
+        if interest >= 3:
+            pros.append("✅ Healthy Interest Coverage")
+
+        if quality >= 70:
+            pros.append("✅ High Composite Quality Score")
+
+        if len(pros) == 0:
+            st.info("No major strengths identified.")
+
+        else:
+
+            for item in pros:
+                st.write(item)
+
+    with cons_col:
+
+        st.error("Cons")
+
+        cons = []
+
+        if debt > 1:
+            cons.append("❌ High Debt")
+
+        if interest < 3:
+            cons.append("❌ Low Interest Coverage")
+
+        if npm < 5:
+            cons.append("❌ Low Net Profit Margin")
+
+        if revenue_cagr < 5:
+            cons.append("❌ Weak Revenue Growth")
+
+        if pat_cagr < 5:
+            cons.append("❌ Weak PAT Growth")
+
+        if eps_cagr < 5:
+            cons.append("❌ Weak EPS Growth")
+
+        if fcf < 0:
+            cons.append("❌ Negative Free Cash Flow")
+
+        if quality < 50:
+            cons.append("❌ Low Composite Quality Score")
+
+        if len(cons) == 0:
+            st.info("No major weaknesses identified.")
+
+        else:
+
+            for item in cons:
+                st.write(item)
+
+    # ==========================================================
+    # Balance Sheet
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Balance Sheet")
+
+    if not bs.empty:
+
+        bs_display = (
+            bs.sort_values(
+                "year",
+                ascending=False,
+            )
+            .fillna("N/A")
+        )
+
+        st.dataframe(
+            bs_display,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info("Balance Sheet data not available.")
+
+    # ==========================================================
+    # Cash Flow Statement
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Cash Flow Statement")
+
+    if not cf.empty:
+
+        cf_display = (
+            cf.sort_values(
+                "year",
+                ascending=False,
+            )
+            .fillna("N/A")
+        )
+
+        st.dataframe(
+            cf_display,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    else:
+
+        st.info("Cash Flow data not available.")
+
+    # ==========================================================
+    # Financial Summary
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Financial Summary")
+
+    summary_left, summary_right = st.columns(2)
+
+    with summary_left:
+
+        st.metric(
+            "Revenue CAGR (5Y)",
+            f"{revenue_cagr:.2f}%"
+        )
+
+        st.metric(
+            "PAT CAGR (5Y)",
+            f"{pat_cagr:.2f}%"
+        )
+
+        st.metric(
+            "EPS CAGR (5Y)",
+            f"{eps_cagr:.2f}%"
+        )
+
+    with summary_right:
+
+        st.metric(
+            "Interest Coverage",
+            f"{interest:.2f}"
+        )
+
+        st.metric(
+            "Debt / Equity",
+            f"{debt:.2f}"
+        )
+
+        st.metric(
+            "Composite Quality Score",
+            f"{quality:.2f}"
+        )
+
+    # ==========================================================
+    # About Company
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("About Company")
+
+    about = company.get("about_company")
+
+    if pd.notna(about):
+
+        st.info(about)
+
+    else:
+
+        st.info("No company description available.")
+
+    # ==========================================================
+    # Useful Links
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Useful Links")
+
+    website = company.get("website")
+    nse = company.get("nse_profile")
+    bse = company.get("bse_profile")
+
+    if pd.notna(website):
+        st.markdown(f"🌐 **Website:** {website}")
+
+    if pd.notna(nse):
+        st.markdown(f"📈 **NSE Profile:** {nse}")
+
+    if pd.notna(bse):
+        st.markdown(f"🏛️ **BSE Profile:** {bse}")
+
+    # ==========================================================
+    # Download Financial Data
+    # ==========================================================
+
+    styled_divider()
+
+    st.subheader("Download Financial Data")
+
+    if not pl.empty:
+
+        csv = pl.to_csv(index=False).encode("utf-8")
+
+        st.download_button(
+            label="📥 Download Profit & Loss CSV",
+            data=csv,
+            file_name=f"{selected_company}_{company_id}_profit_loss.csv",
+            mime="text/csv",
+        )
+
+    # ==========================================================
+    # Footer
+    # ==========================================================
+
+    styled_divider()
+
+    st.caption(
+            "📊 N100 Financial Analytics Dashboard "
+        )
+
+# reports.py
+import streamlit as st
+import pandas as pd
+import requests
+
+from utils.db import (
+    get_companies,
+    get_reports,
+)
+from utils.theme import page_header
+
+# ==========================================================
+# HELPERS
+# ==========================================================
+
+def divider():
+    st.markdown("---")
+
+
+def section(title):
+    st.subheader(title)
+
+
+def resolve_column(df, target_name):
+    """
+    Finds a column in df matching target_name, case-insensitively,
+    and returns its actual name. Returns None if not found.
+    Protects against KeyErrors when the DB returns 'year' instead
+    of 'Year', 'annual_report' instead of 'Annual_Report', etc.
+    """
+
+    target_lower = target_name.lower()
+
+    for col in df.columns:
+        if col.lower() == target_lower:
+            return col
+
+    return None
+
+
+def standardize_reports_columns(df):
+    """
+    Renames whichever casing/format the DB actually uses for the
+    required columns into the exact names the rest of this page
+    expects: company_id, Year, Annual_Report.
+    """
+
+    rename_map = {}
+
+    for expected in ["company_id", "Year", "Annual_Report"]:
+        actual = resolve_column(df, expected)
+        if actual and actual != expected:
+            rename_map[actual] = expected
+
+    if rename_map:
+        df = df.rename(columns=rename_map)
+
+    return df
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def check_pdf(url):
+    """
+    Checks whether a PDF/report URL is reachable.
+
+    NOTE: BSE India blocks HTTP HEAD requests for many report URLs and
+    returns a 404 for them even though the PDF itself opens fine in a
+    browser. So for bseindia.com links we trust the URL's presence
+    instead of verifying it over the network. For any other domain we
+    still do a lightweight GET check.
+
+    Cached so the same URL is only hit over the network once per 30
+    minutes, instead of once per section on every rerun.
+    """
+
+    if pd.isna(url):
+        return False
+
+    url = str(url).strip()
+
+    if url == "":
+        return False
+
+    # BSE blocks HEAD requests (and often GET verification too) -- if
+    # the DB has a BSE link stored, treat it as available rather than
+    # false-flagging it as unavailable.
+    if "bseindia.com" in url.lower():
+        return True
+
+    try:
+
+        response = requests.get(
+            url,
+            stream=True,
+            timeout=5,
+            allow_redirects=True,
+        )
+
+        return response.status_code == 200
+
+    except Exception:
+
+        return False
+
+
+def availability_badge(status):
+
+    if status:
+
+        return (
+            '<span class="report-ok">'
+            'Available'
+            '</span>'
+        )
+
+    return (
+        '<span class="report-bad">'
+        'Unavailable'
+        '</span>'
+    )
+
+
+def show():
+
+    # ==========================================================
+    # PAGE START
+    # ==========================================================
+
+    page_header(
+        "📄",
+        "Annual Reports",
+        "Browse and download annual report filings by company and year.",
+    )
+
+    # ==========================================================
+    # LOAD DATA
+    # ==========================================================
+
+    companies = get_companies()
+    reports = get_reports()
+
+    if companies.empty:
+        st.error("Companies table not found.")
+        st.stop()
+
+    if reports.empty:
+        st.error("No Annual Reports found in database.")
+        st.stop()
+
+    # Normalize column casing so 'year'/'Year', 'annual_report'/'Annual_Report',
+    # 'company_id'/'CompanyID' etc. all resolve to what this page expects.
+    reports = standardize_reports_columns(reports)
+
+    id_col = resolve_column(companies, "id")
+    company_id_col = resolve_column(companies, "company_id")
+
+    if company_id_col is None and id_col is not None:
+        companies = companies.rename(columns={id_col: "company_id"})
+
+    name_col = resolve_column(companies, "company_name")
+    if name_col and name_col != "company_name":
+        companies = companies.rename(columns={name_col: "company_name"})
+
+    # Guard against missing required columns
+    required_report_cols = {"company_id", "Year", "Annual_Report"}
+    missing_cols = required_report_cols - set(reports.columns)
+
+    if missing_cols:
+        st.error(f"Reports table is missing required column(s): {', '.join(sorted(missing_cols))}")
+        st.stop()
+
+    if "company_id" not in companies.columns or "company_name" not in companies.columns:
+        st.error("Companies table must contain 'company_id' and 'company_name' columns.")
+        st.stop()
+
+    reports = reports.merge(
+
+        companies[
+            [
+                "company_id",
+                "company_name",
+            ]
+        ],
+
+        on="company_id",
+
+        how="left",
+
+    )
+
+    reports["company_name"] = reports["company_name"].fillna("Unknown")
+
+    reports = reports.sort_values(
+
+        [
+            "company_name",
+            "Year",
+        ],
+
+        ascending=[True, False],
+
+    )
+
+    # ==========================================================
+    # SIDEBAR
+    # ==========================================================
+
+    st.sidebar.header("📑 Filters")
+
+    company_names = (
+        reports["company_name"]
+        .dropna()
+        .sort_values()
+        .unique()
+        .tolist()
+    )
+
+    search_text = st.sidebar.text_input(
+        "🔍 Search Company",
+        placeholder="Type company..."
+    )
+
+    if search_text:
+
+        company_names = [
+
+            c
+
+            for c in company_names
+
+            if search_text.lower() in c.lower()
+
+        ]
+
+    if not company_names:
+        st.sidebar.warning("No companies match your search.")
+        st.warning("No companies match your search term. Try a different name.")
+        st.stop()
+
+    selected_company = st.sidebar.selectbox(
+
+        "Select Company",
+
+        company_names,
+
+    )
+
+    # ==========================================================
+    # FILTER COMPANY
+    # ==========================================================
+
+    company_reports = reports[
+        reports["company_name"] == selected_company
+    ].copy()
+
+    company_reports = company_reports.sort_values(
+        "Year",
+        ascending=False,
+    )
+
+    # ==========================================================
+    # YEAR FILTER
+    # ==========================================================
+
+    available_years = (
+        company_reports["Year"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_years = st.sidebar.multiselect(
+
+        "Select Year(s)",
+
+        available_years,
+
+        default=available_years,
+
+    )
+
+    if selected_years:
+
+        company_reports = company_reports[
+            company_reports["Year"].isin(selected_years)
+        ]
+
+    divider()
+
+    section("📊 Report Summary")
+
+    c1, c2 = st.columns(2)
+
+    with c1:
+
+        st.metric(
+            "Company",
+            selected_company,
+        )
+
+    with c2:
+
+        st.metric(
+            "Reports Found",
+            len(company_reports),
+        )
+
+    divider()
+
+    # ==========================================================
+    # REPORT LIST
+    # ==========================================================
+
+    section("📂 Available Annual Reports")
+
+    # Initialized here (not inside the else-branch) so later sections
+    # can safely reference these counts even if company_reports is empty.
+    available_count = 0
+    unavailable_count = 0
+
+    # Pre-compute PDF availability once per row and reuse everywhere
+    # below, instead of re-checking the same URL multiple times.
+    if not company_reports.empty:
+        company_reports["_report_ok"] = company_reports["Annual_Report"].apply(check_pdf)
+        available_count = int(company_reports["_report_ok"].sum())
+        unavailable_count = int((~company_reports["_report_ok"]).sum())
+
+    if company_reports.empty:
+
+        st.warning(
+            "No Annual Reports available for the selected filters."
+        )
+
+    else:
+
+        for _, row in company_reports.iterrows():
+
+            report_url = row["Annual_Report"]
+            report_ok = row["_report_ok"]
+
+            with st.container():
+
+                st.markdown(
+                    '<div class="pdf-card">',
+                    unsafe_allow_html=True,
+                )
+
+                left, right = st.columns([5, 2])
+
+                with left:
+
+                    st.markdown(
+                        f"### 📅 {row['Year']}"
+                    )
+
+                    st.markdown(
+                        availability_badge(report_ok),
+                        unsafe_allow_html=True,
+                    )
+
+                    st.write("")
+
+                    if report_ok:
+
+                        st.markdown(
+                            f"""
+    <a href="{report_url}" target="_blank">
+    Open Annual Report (PDF)
+    </a>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+
+                    else:
+
+                        st.error(
+                            "Report unavailable or BSE link is invalid."
+                        )
+
+                with right:
+
+                    if report_ok:
+
+                        st.success("Ready")
+
+                    else:
+
+                        st.error("404")
+
+                st.markdown(
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
+    # ==========================================================
+    # SUMMARY
+    # ==========================================================
+
+    divider()
+
+    section("📈 Report Statistics")
+
+    m1, m2, m3 = st.columns(3)
+
+    m1.metric(
+        "Total Reports",
+        len(company_reports),
+    )
+
+    m2.metric(
+        "Available",
+        available_count,
+    )
+
+    m3.metric(
+        "Unavailable",
+        unavailable_count,
+    )
+
+    divider()
+
+    # ==========================================================
+    # YEAR-WISE REPORT TABLE
+    # ==========================================================
+
+    section("📋 Report History")
+
+    if company_reports.empty:
+
+        st.info("No report history to display.")
+
+    else:
+
+        table_df = company_reports.copy()
+
+        table_df["Status"] = table_df["_report_ok"].map(
+            {
+                True: "🟢 Available",
+                False: "🔴 Unavailable",
+            }
+        )
+
+        table_df = table_df[
+            [
+                "Year",
+                "Status",
+                "Annual_Report",
+            ]
+        ]
+
+        table_df = table_df.rename(
+            columns={
+                "Annual_Report": "PDF Link",
+            }
+        )
+
+        st.dataframe(
+            table_df,
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ==========================================================
+    # QUICK SEARCH
+    # ==========================================================
+
+    divider()
+
+    section("🔎 Find Report")
+
+    search_year = st.text_input(
+        "Enter Report Year",
+        placeholder="Example : 2023"
+    )
+
+    if search_year:
+
+        search_df = company_reports[
+            company_reports["Year"]
+            .astype(str)
+            .str.contains(search_year, case=False, na=False)
+        ]
+
+        if search_df.empty:
+
+            st.warning(
+                "No report found."
+            )
+
+        else:
+
+            st.success(
+                f"{len(search_df)} report(s) found."
+            )
+
+            st.dataframe(
+
+                search_df[
+                    [
+                        "Year",
+                        "Annual_Report",
+                    ]
+                ],
+
+                hide_index=True,
+
+                use_container_width=True,
+
+            )
+
+    divider()
+
+    # ==========================================================
+    # DOWNLOAD / OPEN LINKS
+    # ==========================================================
+
+    section("📥 Open Reports")
+
+    if company_reports.empty:
+
+        st.info("No reports to open for the current selection.")
+
+    else:
+
+        for _, row in company_reports.iterrows():
+
+            pdf = row["Annual_Report"]
+
+            year = row["Year"]
+
+            ok = row["_report_ok"]
+
+            if ok:
+
+                st.link_button(
+
+                    f"📄 Open {year} Annual Report",
+
+                    pdf,
+
+                    use_container_width=True,
+
+                )
+
+            else:
+
+                st.button(
+
+                    f"❌ {year} Report Unavailable",
+
+                    disabled=True,
+
+                    use_container_width=True,
+
+                    key=f"unavailable_{year}",
+
+                )
+
+
+    # ==========================================================
+    # DASHBOARD KPIs
+    # ==========================================================
+
+    divider()
+
+    section("📊 Dashboard Summary")
+
+    k1, k2, k3, k4 = st.columns(4)
+
+    total_reports = len(company_reports)
+
+    latest_report = (
+        company_reports["Year"].max()
+        if total_reports > 0
+        else "-"
+    )
+
+    k1.metric(
+        "Total Reports",
+        total_reports,
+    )
+
+    k2.metric(
+        "Available",
+        available_count,
+    )
+
+    k3.metric(
+        "Unavailable",
+        unavailable_count,
+    )
+
+    k4.metric(
+        "Latest Report",
+        latest_report,
+    )
+
+    # ==========================================================
+    # REPORTS BY YEAR
+    # ==========================================================
+
+    divider()
+
+    section("📈 Reports Timeline")
+
+    if company_reports.empty:
+
+        st.info("No data available for the timeline.")
+
+    else:
+
+        timeline = (
+            company_reports
+            .groupby("Year")
+            .size()
+            .reset_index(name="Reports")
+            .sort_values("Year")
+        )
+
+        if not timeline.empty:
+
+            st.bar_chart(
+                timeline.set_index("Year")
+            )
+
+
+    # ==========================================================
+    # DATASET INFORMATION
+    # ==========================================================
+
+    divider()
+
+    with st.expander("ℹ Dataset Information", expanded=False):
+
+        st.write("### Database")
+
+        st.write(
+            """
+    **Tables Used**
+
+    • companies
+
+    • documents
+    """
+        )
+
+        st.write("### Source")
+
+        st.info(
+            """
+    Annual Reports are fetched from
+    the **BSE India** document links
+    stored in the database.
+    """
+        )
+
+        st.write("### Selected Company")
+
+        st.write(selected_company)
+
+        st.write("### Available Years")
+
+        if not company_reports.empty:
+
+            st.write(
+                sorted(
+                    company_reports["Year"]
+                    .unique(),
+                    reverse=True,
+                )
+            )
+
+        else:
+
+            st.write("No years available for this selection.")
+
+    # ==========================================================
+    # FOOTER
+    # ==========================================================
+
+    divider()
+
+    st.caption(
+        """
+    📄 N100 Financial Analytics Dashboard
+
+    Annual Reports Module
+
+    Data Source : BSE India
+    """
+    )
+
+
+if __name__ == "__main__":
+    show()
+
+# screener.py
+import streamlit as st
+import pandas as pd
+from io import BytesIO
+
+from utils.db import (
+    get_companies,
+    get_ratios,
+    get_sectors,
+)
+from utils.theme import page_header
+from utils.helpers import display_value
+
+
+def divider():
+    st.markdown(
+        "<hr style='margin-top:1rem;margin-bottom:1rem;'>",
+        unsafe_allow_html=True,
+    )
+
+
+# ==========================================================
+# Helper Functions
+# ==========================================================
+
+def safe_series(df, column, default=0):
+    if column not in df.columns:
+        return pd.Series([default] * len(df))
+
+    return df[column].fillna(default)
+
+
+def rating(score):
+    if score >= 80:
+        return "⭐⭐⭐⭐⭐"
+
+    elif score >= 60:
+        return "⭐⭐⭐⭐"
+
+    elif score >= 40:
+        return "⭐⭐⭐"
+
+    elif score >= 20:
+        return "⭐⭐"
+
+    return "⭐"
+
+
+def to_excel(df):
+
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(
+            writer,
+            sheet_name="Screener",
+            index=False,
+        )
+
+    return output.getvalue()
+
+
+def percentile_slider(label, series, default, low_q=0.01, high_q=0.99):
+    """
+    Build a slider whose min/max are the 1st/99th percentile of the
+    data rather than raw min()/max(). Protects against a handful of
+    bad/outlier rows (e.g. ROE of 4744%) blowing the slider range out
+    to something unusable, while still keeping ~98% of real data in
+    range.
+
+    The requested `default` is clamped into the computed [low, high]
+    bounds — otherwise, if the percentile range shrinks below the
+    hardcoded default (e.g. 99th-percentile ROE is 8% but default is
+    10.0), st.sidebar.slider raises an error.
+    """
+
+    low = float(series.quantile(low_q))
+    high = float(series.quantile(high_q))
+
+    # Degenerate case: percentiles collapse to the same value (e.g.
+    # a near-constant column). Fall back to raw min/max so the
+    # slider still has a usable range instead of low == high.
+    if low >= high:
+        low = float(series.min())
+        high = float(series.max())
+
+    if low >= high:
+        # Still degenerate (e.g. only one row). Widen slightly so
+        # Streamlit doesn't error on a zero-width slider.
+        high = low + 1.0
+
+    default_clamped = min(max(float(default), low), high)
+
+    return st.sidebar.slider(
+        label,
+        low,
+        high,
+        default_clamped,
+    )
+
+# ==========================================================
+# Screener Page
+# ==========================================================
+
+def show():
+
+    page_header(
+        "🔍",
+        "Stock Screener",
+        "Filter the Nifty 100 universe by the ratios and quality metrics that matter to you.",
+    )
+
+    # ------------------------------------------------------
+    # Load Data
+    # ------------------------------------------------------
+
+    companies = get_companies()
+    ratios = get_ratios()
+    sectors = get_sectors()
+
+    if ratios.empty:
+        st.warning("Financial ratio data not available.")
+        st.stop()
+
+    # ------------------------------------------------------
+    # Merge Company Names
+    # ------------------------------------------------------
+
+    ratios = ratios.merge(
+        companies[
+            [
+                "id",
+                "company_name",
+            ]
+        ],
+        left_on="company_id",
+        right_on="id",
+        how="left",
+    )
+
+    # ------------------------------------------------------
+    # Merge Sector Information
+    # ------------------------------------------------------
+
+    ratios = ratios.merge(
+        sectors[
+            [
+                "company_id",
+                "broad_sector",
+            ]
+        ],
+        on="company_id",
+        how="left",
+    )
+
+    # ------------------------------------------------------
+    # Fill Missing Values
+    # ------------------------------------------------------
+
+    numeric_columns = [
+
+        "return_on_equity_pct",
+
+        "debt_to_equity",
+
+        "free_cash_flow_cr",
+
+        "revenue_cagr_5yr",
+
+        "pat_cagr_5yr",
+
+        "operating_profit_margin_pct",
+
+        "interest_coverage",
+
+        "composite_quality_score",
+
+        "dividend_payout_ratio_pct",
+
+    ]
+
+    for col in numeric_columns:
+        ratios[col] = safe_series(ratios, col)
+
+    # ------------------------------------------------------
+    # Sidebar Filters
+    # ------------------------------------------------------
+
+    st.sidebar.header("📌 Filters")
+
+    # ---------------- Year ----------------
+
+    ratios["calendar_year"] = (
+        ratios["year"]
+        .astype(str)
+        .str[-4:]
+        .astype(int)
+    )
+
+    available_years = sorted(
+        ratios["calendar_year"].unique(),
+        reverse=True,
+    )
+
+    selected_year = st.sidebar.selectbox(
+        "Financial Year",
+        available_years,
+    )
+
+    ratios = ratios[
+        ratios["calendar_year"] == selected_year
+    ]
+
+    # ---------------- Sector ----------------
+
+    sector_list = ["All"] + sorted(
+        ratios["broad_sector"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_sector = st.sidebar.selectbox(
+        "Sector",
+        sector_list,
+    )
+
+    if selected_sector != "All":
+
+        ratios = ratios[
+            ratios["broad_sector"] == selected_sector
+        ]
+
+    # ---------------- Company Search ----------------
+
+    company_search = st.sidebar.text_input(
+        "🔍 Search Company"
+    )
+
+    if company_search:
+
+        ratios = ratios[
+            ratios["company_name"]
+            .str.contains(
+                company_search,
+                case=False,
+                na=False,
+            )
+        ]
+
+    # ---------------- Reset ----------------
+
+    if st.sidebar.button("🔄 Reset Filters"):
+        st.rerun()
+
+        # ======================================================
+    # Dynamic Slider Ranges (Fix 3: 1st/99th percentile clipping)
+    #
+    # Raw min()/max() on these columns can be dragged out to
+    # unusable extremes by a handful of bad-data outliers (e.g. a
+    # 4744% ROE row). Clipping the slider bounds to the 1st/99th
+    # percentile keeps ~98% of real data selectable while ignoring
+    # those extremes. FCF is intentionally left on raw min/max,
+    # since free cash flow legitimately varies across orders of
+    # magnitude between companies and percentile-clipping it would
+    # hide real (not erroneous) large-cap FCF values.
+    # ======================================================
+
+    st.sidebar.header("📊 Financial Filters")
+
+    roe_min = percentile_slider(
+        "Minimum ROE (%)",
+        ratios["return_on_equity_pct"],
+        10.0,
+    )
+
+    debt_max = percentile_slider(
+        "Maximum Debt / Equity",
+        ratios["debt_to_equity"],
+        1.0,
+    )
+
+    fcf_min = st.sidebar.slider(
+        "Minimum Free Cash Flow (Cr)",
+        float(ratios["free_cash_flow_cr"].min()),
+        float(ratios["free_cash_flow_cr"].max()),
+        0.0,
+    )
+
+    revenue_min = percentile_slider(
+        "Minimum Revenue CAGR (%)",
+        ratios["revenue_cagr_5yr"],
+        5.0,
+    )
+
+    pat_min = percentile_slider(
+        "Minimum PAT CAGR (%)",
+        ratios["pat_cagr_5yr"],
+        5.0,
+    )
+
+    opm_min = percentile_slider(
+        "Minimum OPM (%)",
+        ratios["operating_profit_margin_pct"],
+        10.0,
+    )
+
+    dividend_min = percentile_slider(
+        "Minimum Dividend Payout (%)",
+        ratios["dividend_payout_ratio_pct"],
+        0.0,
+    )
+
+    icr_min = percentile_slider(
+        "Minimum Interest Coverage",
+        ratios["interest_coverage"],
+        3.0,
+    )
+
+    # ======================================================
+    # Sorting
+    # ======================================================
+
+    st.sidebar.header("⬇ Sorting")
+
+    sort_column = st.sidebar.selectbox(
+        "Sort By",
+        [
+            "Quality Score",
+            "ROE",
+            "Revenue CAGR",
+            "PAT CAGR",
+            "Debt/Equity",
+            "Free Cash Flow",
+        ],
+    )
+
+    ascending = st.sidebar.checkbox(
+        "Ascending",
+        False,
+    )
+
+    sort_map = {
+        "Quality Score": "composite_quality_score",
+        "ROE": "return_on_equity_pct",
+        "Revenue CAGR": "revenue_cagr_5yr",
+        "PAT CAGR": "pat_cagr_5yr",
+        "Debt/Equity": "debt_to_equity",
+        "Free Cash Flow": "free_cash_flow_cr",
+    }
+
+    # ======================================================
+    # Quick Presets
+    # ======================================================
+
+    divider()
+
+    st.subheader("🎯 Quick Presets")
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+
+    preset = None
+
+    if c1.button("Quality"):
+        preset = "quality"
+
+    if c2.button("Growth"):
+        preset = "growth"
+
+    if c3.button("Dividend"):
+        preset = "dividend"
+
+    if c4.button("Debt-Free"):
+        preset = "debt"
+
+    if c5.button("Turnaround"):
+        preset = "turnaround"
+
+    if preset == "quality":
+
+        roe_min = 20
+        debt_max = 0.50
+        revenue_min = 10
+        pat_min = 10
+        opm_min = 15
+        icr_min = 5
+
+    elif preset == "growth":
+
+        roe_min = 15
+        revenue_min = 15
+        pat_min = 15
+
+    elif preset == "dividend":
+
+        dividend_min = 30
+
+    elif preset == "debt":
+
+        debt_max = 0.10
+
+    elif preset == "turnaround":
+
+        revenue_min = 5
+        pat_min = 5
+        fcf_min = 0
+
+        # ======================================================
+    # Apply Filters
+    # ======================================================
+
+    filtered = ratios.copy()
+
+    filtered = filtered[
+        filtered["return_on_equity_pct"] >= roe_min
+    ]
+
+    filtered = filtered[
+        filtered["debt_to_equity"] <= debt_max
+    ]
+
+    filtered = filtered[
+        filtered["free_cash_flow_cr"] >= fcf_min
+    ]
+
+    filtered = filtered[
+        filtered["revenue_cagr_5yr"] >= revenue_min
+    ]
+
+    filtered = filtered[
+        filtered["pat_cagr_5yr"] >= pat_min
+    ]
+
+    filtered = filtered[
+        filtered["operating_profit_margin_pct"] >= opm_min
+    ]
+
+    filtered = filtered[
+        filtered["interest_coverage"] >= icr_min
+    ]
+
+    filtered = filtered[
+        filtered["dividend_payout_ratio_pct"] >= dividend_min
+    ]
+
+    # ======================================================
+    # Sorting
+    # ======================================================
+
+    filtered = filtered.sort_values(
+        by=sort_map[sort_column],
+        ascending=ascending,
+    )
+
+    # ======================================================
+    # Quality Rating
+    # ======================================================
+
+    filtered["Rating"] = filtered[
+        "composite_quality_score"
+    ].apply(rating)
+
+    # ======================================================
+    # Result Count
+    # ======================================================
+
+    divider()
+
+    st.subheader("📈 Screening Results")
+
+    st.success(
+        f"✅ {len(filtered)} companies match your filters."
+    )
+
+    st.info(
+        f"Financial Year : {selected_year}   |   Sector : {selected_sector}"
+    )
+
+    # ======================================================
+    # Sector Summary
+    # ======================================================
+
+    if not filtered.empty:
+
+        st.subheader("🏢 Sector Summary")
+
+        sector_summary = (
+            filtered
+            .groupby("broad_sector")
+            .size()
+            .reset_index(name="Companies")
+            .sort_values(
+                "Companies",
+                ascending=False,
+            )
+        )
+
+        st.dataframe(
+            sector_summary.fillna("N/A"),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ======================================================
+    # Display Data
+    # ======================================================
+
+    display_df = filtered[
+        [
+            "company_id",
+            "company_name",
+            "broad_sector",
+            "return_on_equity_pct",
+            "debt_to_equity",
+            "free_cash_flow_cr",
+            "revenue_cagr_5yr",
+            "pat_cagr_5yr",
+            "operating_profit_margin_pct",
+            "interest_coverage",
+            "dividend_payout_ratio_pct",
+            "composite_quality_score",
+            "Rating",
+        ]
+    ].copy()
+
+    display_df = display_df.rename(
+        columns={
+            "company_id": "Company ID",
+            "company_name": "Company",
+            "broad_sector": "Sector",
+            "return_on_equity_pct": "ROE (%)",
+            "debt_to_equity": "Debt/Equity",
+            "free_cash_flow_cr": "FCF (Cr)",
+            "revenue_cagr_5yr": "Revenue CAGR (%)",
+            "pat_cagr_5yr": "PAT CAGR (%)",
+            "operating_profit_margin_pct": "OPM (%)",
+            "interest_coverage": "Interest Coverage",
+            "dividend_payout_ratio_pct": "Dividend Payout (%)",
+            "composite_quality_score": "Quality Score",
+        }
+    )
+
+        # ======================================================
+    # Results Table
+    # ======================================================
+
+    divider()
+
+    if display_df.empty:
+
+        st.warning(
+            "No companies match the selected filters."
+        )
+
+    else:
+
+        st.dataframe(
+            display_df.fillna("N/A"),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ======================================================
+    # Download Buttons
+    # ======================================================
+
+    if not display_df.empty:
+
+        divider()
+
+        csv = display_df.to_csv(
+            index=False
+        ).encode("utf-8")
+
+        excel = to_excel(display_df)
+
+        d1, d2 = st.columns(2)
+
+        with d1:
+
+            st.download_button(
+                "📥 Download CSV",
+                csv,
+                "screener_results.csv",
+                "text/csv",
+            )
+
+        with d2:
+
+            st.download_button(
+                "📗 Download Excel",
+                excel,
+                "screener_results.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+
+    # ======================================================
+    # Summary Statistics
+    # ======================================================
+
+    if not display_df.empty:
+
+        divider()
+
+        st.subheader("📊 Filter Summary")
+
+        c1, c2, c3, c4 = st.columns(4)
+
+        c1.metric(
+            "Companies",
+            len(display_df),
+        )
+
+        c2.metric(
+            "Average ROE",
+            display_value(display_df["ROE (%)"].mean(), "%"),
+        )
+
+        c3.metric(
+            "Average Revenue CAGR",
+            display_value(display_df["Revenue CAGR (%)"].mean(), "%"),
+        )
+
+        c4.metric(
+            "Average Quality Score",
+            display_value(display_df["Quality Score"].mean()),
+        )
+
+    # ======================================================
+    # Top 10 Companies
+    # ======================================================
+
+    if not display_df.empty:
+
+        divider()
+
+        st.subheader("🏆 Top 10 Companies by Quality Score")
+
+        top10 = (
+            display_df
+            .sort_values(
+                "Quality Score",
+                ascending=False,
+            )
+            .head(10)
+        )
+
+        st.dataframe(
+            top10.fillna("N/A"),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    # ======================================================
+    # Dataset Information
+    # ======================================================
+
+    divider()
+
+    with st.expander("ℹ Dataset Information"):
+
+        st.write(
+            f"**Financial Year:** {selected_year}"
+        )
+
+        st.write(
+            f"**Selected Sector:** {selected_sector}"
+        )
+
+        st.write(
+            f"**Companies Loaded:** {len(ratios)}"
+        )
+
+        st.write(
+            f"**Companies Matching Filters:** {len(display_df)}"
+        )
+
+        st.markdown(
+            """
+### Database Tables Used
+
+- Companies
+- Financial Ratios
+- Sectors
+
+### Slider Ranges
+
+Most financial-ratio sliders (ROE, Debt/Equity, Revenue CAGR, PAT
+CAGR, OPM, Dividend Payout, Interest Coverage) are bounded by the
+1st and 99th percentile of the current filtered dataset rather than
+raw min/max, so a handful of outlier or bad-data rows can't blow the
+slider range out to something unusable. Free Cash Flow keeps its
+raw min/max range, since large legitimate swings in FCF across
+companies are expected rather than data errors.
+
+### Current Limitations
+
+- P/E Ratio filter unavailable
+- P/B Ratio filter unavailable
+- Valuation table will be added in Sprint 5
+            """
+        )
+
+    # ======================================================
+    # Footer
+    # ======================================================
+
+    divider()
+
+    st.caption(
+        "📊 N100 Financial Analytics Dashboard | Stock Screener"
+    )
+
+# trends.py
+import streamlit as st
+import pandas as pd
+import plotly.graph_objects as go
+
+from utils.db import (
+    get_companies,
+    get_ratios,
+)
+from utils.theme import page_header
+from utils.helpers import display_value
+
+
+# =====================================================
+# Helper Functions
+# =====================================================
+
+def divider():
+    st.markdown("<hr/>", unsafe_allow_html=True)
+
+
+def safe_series(df, column, default=0):
+    if column not in df.columns:
+        return pd.Series([default] * len(df))
+
+    return df[column].fillna(default)
+
+
+def calculate_yoy(series):
+    """
+    Returns Year-over-Year percentage change.
+    """
+
+    return series.pct_change() * 100
+
+
+def format_number(value):
+
+    if pd.isna(value):
+        return "N/A"
+
+    if abs(value) >= 1000:
+        return f"{value:,.0f}"
+
+    return f"{value:.2f}"
+
+
+def safe_float(value):
+
+    try:
+        if pd.isna(value):
+            return 0.0
+        return float(value)
+    except Exception:
+        return 0.0
+
+# =====================================================
+# Trend Analysis Page
+# =====================================================
+
+def show():
+
+    page_header(
+        "📈",
+        "Trend Analysis",
+        "Track how key financial ratios have evolved over time.",
+    )
+
+    # -------------------------------------------------
+    # Load Data
+    # -------------------------------------------------
+
+    companies = get_companies()
+    ratios = get_ratios()
+
+    if companies.empty or ratios.empty:
+
+        st.warning("Financial data not available.")
+
+        st.stop()
+
+    # -------------------------------------------------
+    # Merge Company Names
+    # -------------------------------------------------
+
+    companies = companies.rename(
+        columns={"id": "company_id"}
+    )
+
+    ratios = ratios.merge(
+
+        companies[
+            [
+                "company_id",
+                "company_name",
+            ]
+        ],
+
+        on="company_id",
+
+        how="left",
+
+    )
+
+    # -------------------------------------------------
+    # Sidebar
+    # -------------------------------------------------
+
+    st.sidebar.header("Trend Settings")
+
+    company_list = sorted(
+        ratios["company_name"]
+        .dropna()
+        .unique()
+        .tolist()
+    )
+
+    selected_company = st.sidebar.selectbox(
+        "Select Company",
+        company_list,
+    )
+
+    # -------------------------------------------------
+    # Company Data
+    # -------------------------------------------------
+
+    company_df = ratios[
+        ratios["company_name"] == selected_company
+    ].copy()
+
+    if company_df.empty:
+
+        st.error(
+            "Company data not found."
+        )
+
+        st.stop()
+
+    # -------------------------------------------------
+    # Sort Years
+    # -------------------------------------------------
+
+    company_df = company_df.sort_values(
+        "year"
+    )
+
+    # -------------------------------------------------
+    # Available Metrics
+    # -------------------------------------------------
+
+    metric_map = {
+
+        "Revenue CAGR":
+            "revenue_cagr_5yr",
+
+        "PAT CAGR":
+            "pat_cagr_5yr",
+
+        "EPS CAGR":
+            "eps_cagr_5yr",
+
+        "ROE":
+            "return_on_equity_pct",
+
+        "Net Profit Margin":
+            "net_profit_margin_pct",
+
+        "Operating Margin":
+            "operating_profit_margin_pct",
+
+        "Debt / Equity":
+            "debt_to_equity",
+
+        "Interest Coverage":
+            "interest_coverage",
+
+        "Free Cash Flow":
+            "free_cash_flow_cr",
+
+        "Quality Score":
+            "composite_quality_score",
+
+    }
+
+    selected_metrics = st.sidebar.multiselect(
+
+        "Select up to 3 Metrics",
+
+        list(metric_map.keys()),
+
+        default=[
+            "ROE",
+            "Revenue CAGR",
+        ],
+
+        max_selections=3,
+
+    )
+
+    if len(selected_metrics) == 0:
+
+        st.info(
+            "Please select at least one metric."
+        )
+
+        st.stop()
+        # -------------------------------------------------
+    # KPI Cards
+    # -------------------------------------------------
+
+    st.subheader(selected_company)
+
+    latest = company_df.iloc[-1]
+
+    c1, c2, c3 = st.columns(3)
+
+    c1.metric(
+        "ROE",
+        display_value(latest.get("return_on_equity_pct"), "%")
+    )
+
+    c2.metric(
+        "Revenue CAGR",
+        display_value(latest.get("revenue_cagr_5yr"), "%")
+    )
+
+    c3.metric(
+        "Quality Score",
+        display_value(latest.get("composite_quality_score"))
+    )
+
+    st.divider()
+
+    # -------------------------------------------------
+    # Multi Metric Trend Chart
+    # -------------------------------------------------
+
+    fig = go.Figure()
+
+    colors = [
+        "#636EFA",
+        "#EF553B",
+        "#00CC96",
+    ]
+
+    for i, metric_name in enumerate(selected_metrics):
+
+        column = metric_map[metric_name]
+
+        if column not in company_df.columns:
+            st.info(f"{metric_name}: Data not available")
+            continue
+
+        y = company_df[column].fillna(0)
+
+        fig.add_trace(
+
+            go.Scatter(
+
+                x=company_df["year"],
+
+                y=y,
+
+                mode="lines+markers",
+
+                name=metric_name,
+
+                line=dict(
+                    width=3,
+                    color=colors[i]
+                ),
+
+                marker=dict(
+                    size=8
+                )
+
+            )
+
+        )
+
+        # ---------------------------------------------
+        # YoY Annotation
+        #
+        # Format spec uses "+.1f" (note the leading +) so the
+        # sign is always shown explicitly: +12.0%, -5.0%, +18.0%
+        # rather than a bare 12.0% for positive changes.
+        # ---------------------------------------------
+
+        yoy = y.pct_change() * 100
+
+        for x, value, change in zip(
+            company_df["year"],
+            y,
+            yoy,
+        ):
+
+            if pd.notna(change):
+
+                fig.add_annotation(
+
+                    x=x,
+
+                    y=value,
+
+                    text=f"{change:+.1f}%",
+
+                    showarrow=False,
+
+                    yshift=12,
+
+                    font=dict(
+                        size=10,
+                        color=colors[i]
+                    )
+
+                )
+
+        # -------------------------------------------------
+    # Chart Layout
+    # -------------------------------------------------
+
+    fig.update_layout(
+
+        title="10-Year Financial Trend",
+
+        xaxis_title="Financial Year",
+
+        yaxis_title="Value",
+
+        hovermode="x unified",
+
+        height=650,
+
+        template="plotly_white",
+
+        legend=dict(
+
+            orientation="h",
+
+            yanchor="bottom",
+
+            y=1.02,
+
+            xanchor="right",
+
+            x=1,
+
+        ),
+
+        margin=dict(
+
+            l=20,
+
+            r=20,
+
+            t=60,
+
+            b=20,
+
+        ),
+
+    )
+
+    st.plotly_chart(
+
+        fig,
+
+        use_container_width=True,
+
+    )
+
+    st.divider()
+
+    # -------------------------------------------------
+    # Financial Data Table
+    # -------------------------------------------------
+
+    st.subheader("Financial Data")
+
+    display_df = company_df[
+
+        [
+
+            "year",
+
+            "return_on_equity_pct",
+
+            "net_profit_margin_pct",
+
+            "operating_profit_margin_pct",
+
+            "debt_to_equity",
+
+            "interest_coverage",
+
+            "revenue_cagr_5yr",
+
+            "pat_cagr_5yr",
+
+            "eps_cagr_5yr",
+
+            "free_cash_flow_cr",
+
+            "composite_quality_score",
+
+        ]
+
+    ].copy()
+
+    display_df.columns = [
+
+        "Year",
+
+        "ROE (%)",
+
+        "Net Profit Margin (%)",
+
+        "Operating Margin (%)",
+
+        "Debt / Equity",
+
+        "Interest Coverage",
+
+        "Revenue CAGR (%)",
+
+        "PAT CAGR (%)",
+
+        "EPS CAGR (%)",
+
+        "Free Cash Flow (Cr)",
+
+        "Quality Score",
+
+    ]
+
+    st.dataframe(
+
+        display_df.fillna("N/A"),
+
+        use_container_width=True,
+
+        hide_index=True,
+
+    )
+
+    # -------------------------------------------------
+    # Download CSV
+    # -------------------------------------------------
+
+    csv = display_df.to_csv(
+
+        index=False
+
+    ).encode("utf-8")
+
+    st.download_button(
+
+        label="📥 Download Trend Data",
+
+        data=csv,
+
+        file_name=f"{selected_company}_trend.csv",
+
+        mime="text/csv",
+
+    )
+
+    # -------------------------------------------------
+    # Footer
+    # -------------------------------------------------
+
+    st.divider()
+
+    st.caption(
+
+        "📈 N100 Financial Analytics Dashboard | Trend Analysis"
+
+    )

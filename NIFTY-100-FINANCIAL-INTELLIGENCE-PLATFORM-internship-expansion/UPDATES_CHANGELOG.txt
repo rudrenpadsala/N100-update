@@ -1,0 +1,173 @@
+NIFTY 100 FINANCIAL INTELLIGENCE PLATFORM
+Internship Expansion - what was updated and where
+==========================================================================
+Title: Explainable Financial Analytics, Peer Benchmarking and Automated Reporting
+
+The existing project was extended, not replaced. Nothing in the original
+ETL, KPI engine, API, tearsheets or existing dashboard pages was rewritten.
+Only 3 existing files were edited (listed in section B).
+
+
+A. NEW FILES
+--------------------------------------------------------------------------
+
+MODULE 1 - DATA QUALITY MONITORING
+  src/quality/__init__.py
+  src/quality/periods.py
+      One shared parser for period labels ("Mar 2024", "Mar-24", "2024",
+      "TTM", "2024.5", "Mar 2016 9m"). Collapses duplicate label variants,
+      detects each company's fiscal-year-end month, drops off-cycle rows
+      (e.g. "Sep 2024" half-year rows beside "Mar" annual rows).
+  src/quality/data_quality.py
+      DataQualityMonitor. Four check families, each finding has a severity
+      (error / warning / info):
+        - missing values (+ companies missing from a table)
+        - duplicate records (identical vs conflicting, label variants)
+        - inconsistent periods (bad labels, TTM, off-cycle, gaps, tables
+          ending in different years)
+        - invalid metrics (balance sheet not balancing, negative sales,
+          implausible ROE, cash flow not adding up, orphan company ids,
+          bad stock prices, etc.)
+      Also: summarize(), company_reliability() (High/Medium/Low),
+      company_warnings() (text lines used in PDFs).
+      Run:  python -m src.quality.data_quality
+  output/data_quality_report.csv      (generated findings, 1,314 rows)
+
+MODULE 2 - EXPLAINABLE FINANCIAL ANALYTICS
+  src/analytics/financial_metrics.py
+      Latest-full-year indicators computed from the raw statements:
+      ROE, net margin, operating margin, debt-to-equity, interest coverage,
+      revenue CAGR, profit CAGR, CFO/PAT, asset turnover, free cash flow.
+      Impossible values are excluded with a written reason, never hidden.
+  src/analytics/health_score.py
+      Documented 0-100 health score. 8 metrics, 4 pillars (Profitability 30,
+      Leverage 25, Growth 25, Cash quality 20). Straight-line points between
+      two thresholds, weights re-scaled when data is missing, coverage
+      reported, score withheld below 50% coverage. Banks/NBFCs/insurers are
+      not scored on leverage-type metrics. Every result carries a component
+      table (value, points, weight, contribution) that sums exactly to the
+      score, plus strengths, concerns and caveats. Grades A-E.
+  output/health_scores.csv            (league table, 92 companies)
+
+MODULE 3 - PEER BENCHMARKING
+  src/analytics/benchmarking.py
+      Peer set = curated group from the peer_groups table (min 3 members),
+      else broad sector. Per metric: company value, peer median (excluding
+      the company), difference, percentile (direction-aware), rank, verdict.
+      Also sector_summary().
+  output/sector_benchmark.csv
+
+  src/analytics/platform_data.py
+      Loads the database once and computes issues, metrics, scores and
+      league table. Used by the dashboard, the PDFs and the tests so every
+      screen and PDF shows the same numbers.
+
+DASHBOARD
+  src/dashboard/pages/health_benchmark.py
+      New page "Health & Peer Benchmark": score cards, score breakdown
+      table + chart, peer benchmark, sector league, PDF download button.
+  src/dashboard/pages/data_quality.py
+      New page "Data Quality": severity cards, charts, filters, row-level
+      findings, CSV download, worst companies.
+  docs/screenshots/01_health_score_breakdown.png
+  docs/screenshots/02_peer_benchmark.png
+  docs/screenshots/03_sector_league.png
+  docs/screenshots/04_data_quality_monitor.png
+
+MODULE 4 - AUTOMATED PDF REPORTS
+  src/reports/research_report.py
+      4-page company research report: snapshot KPIs, health score with the
+      full component table, sales/profit chart, peer table + percentile
+      chart, data-quality warnings with reliability rating, methodology
+      (formulas, thresholds, weights, limitations).
+      Run:  python -m src.reports.research_report TCS
+            python -m src.reports.research_report --all
+  reports/research/*.pdf              (92 generated reports, ~14 MB)
+
+MODULE 5 - AUTOMATED TESTING
+  tests/conftest.py                   (clean synthetic database + real-DB fixture)
+  tests/quality/test_periods.py
+  tests/quality/test_data_quality.py
+  tests/analytics/test_financial_metrics.py
+  tests/analytics/test_health_score.py
+  tests/analytics/test_benchmarking.py
+  tests/reports/test_research_report.py
+  tests/dashboard/test_dashboard_pages.py
+      157 new tests. They cover: formulas against hand calculations,
+      scoring rules and "parts add up to the total", every data-quality
+      check (break one thing in clean data, expect exactly that finding),
+      peer-set choice and percentile direction, PDF sections / score
+      consistency with the module / warnings carried into the PDF, and
+      dashboard pages rendering without errors. Cross-checks also compare
+      our figures with the stored Sprint 2 ratio table.
+
+DOCUMENTATION
+  UPDATES_CHANGELOG.txt               (this file)
+
+
+B. EXISTING FILES THAT WERE EDITED
+--------------------------------------------------------------------------
+  src/dashboard/app.py
+      Imports the 2 new pages and adds 2 entries to the PAGES menu.
+  src/dashboard/utils/theme.py
+      REWRITTEN: horizontal layout (navy header with the page menu across
+      the top instead of a left sidebar menu) and a new palette: white,
+      navy #0B1F4B, blue #1E63D6, dark brown #4B2E1E. Public functions are
+      unchanged, so no page code was touched. Colours are constants at the
+      top of the file. All Plotly charts use the same palette. The sidebar
+      now shows only on pages that put filters in it.
+      The previous purple theme is in git history.
+  .streamlit/config.toml and src/dashboard/.streamlit/config.toml  (NEW)
+      Forces Streamlit's light theme with the same colours, so the page
+      looks the same on computers set to dark mode.
+  Makefile
+      "dashboard" now starts Streamlit (was a placeholder). Added targets:
+      quality, research-report TICKER=..., research-reports-all.
+  README.md
+      Added the "Internship Expansion" section at the end (modules, health
+      score summary, how to run, data findings, known limitation).
+
+
+C. WHAT THE DATA CHECK FOUND (confirmed from the repository's database)
+--------------------------------------------------------------------------
+  Available: 92 companies, annual P&L / balance sheet / cash flow
+  (about FY2013-FY2024), 5,520 price rows, market cap 2019-2024, 11 curated
+  peer groups (56 companies), 10 broad sectors.
+  Data problems the monitor reports (and the analytics work around):
+    - 26 rows of statements belong to ids not in the company master
+      (WIPRO, VEDL, ZOMATO, ULTRACEMCO in some tables ...)
+    - mixed period labels; TTM rows; "Sep 2024" half-year rows
+    - duplicate rows per company-year (identical and conflicting)
+    - impossible stored ratios (BEL ROE > 4,000%)
+    - expenses / operating profit that break the accounting identity
+    - only 56 of 92 companies have a curated peer group; the rest are
+      benchmarked against their broad sector
+  Not available, so NOT used: sub-annual financials, forecasts, any paid
+  AI. The score does not use stock prices and does not predict prices.
+
+
+D. HOW TO RUN
+--------------------------------------------------------------------------
+  make dashboard                      open the new pages
+  make quality                        data-quality report
+  make research-report TICKER=TCS     one PDF
+  make research-reports-all           all 92 PDFs
+  python -m pytest                    all tests
+
+
+E. TEST STATUS (checked in the build environment)
+--------------------------------------------------------------------------
+  New tests: 157 pass.  Whole repository: 298 pass, 3 fail (301 tests).
+  The 3 failures are in tests/api (portfolio cluster endpoints). They also
+  fail on the original, untouched code because output/cluster_labels.csv is
+  git-ignored (output/*.csv) and therefore not in the repository. Not caused
+  by this work. Fix: run the clustering step to create that file.
+  Checked that the tests can fail: 3 deliberate bugs (wrong balance-sheet
+  tolerance, no weight re-scaling, percentile ignoring direction) were each
+  caught.
+
+
+F. NOT DONE IN THIS SESSION
+--------------------------------------------------------------------------
+  - Project report (document) and presentation (slides) are not written yet.
+  - Nothing has been committed or pushed to GitHub (access was read-only).

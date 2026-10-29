@@ -1,0 +1,493 @@
+{
+  "info": {
+    "name": "N100 Financial Platform API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Get Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/health",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Companies",
+      "item": [
+        {
+          "name": "List Companies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Company",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies/{ticker}",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{ticker}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Profit And Loss",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies/{ticker}/pl",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{ticker}",
+                "pl"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Balance Sheet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies/{ticker}/bs",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{ticker}",
+                "bs"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cashflow",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies/{ticker}/cashflow",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{ticker}",
+                "cashflow"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Ratios",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies/{ticker}/ratios",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{ticker}",
+                "ratios"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Tearsheet",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/companies/{ticker}/tearsheet",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "companies",
+                "{ticker}",
+                "tearsheet"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Screener",
+      "item": [
+        {
+          "name": "List Strategies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/screener/strategies",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "screener",
+                "strategies"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Run Screener",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/screener",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "screener"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sectors",
+      "item": [
+        {
+          "name": "List Sectors",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/sectors",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sectors"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Sector Companies",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/sectors/{sector_name}/companies",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "sectors",
+                "{sector_name}",
+                "companies"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Peers",
+      "item": [
+        {
+          "name": "List Peer Groups",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/peers/groups",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "peers",
+                "groups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Peer Group Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/peers/groups/{peer_group_name}",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "peers",
+                "groups",
+                "{peer_group_name}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Company Percentiles",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/peers/{ticker}/percentiles",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "peers",
+                "{ticker}",
+                "percentiles"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Valuation",
+      "item": [
+        {
+          "name": "Get Valuation History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/valuation/{ticker}",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "valuation",
+                "{ticker}"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Valuation Rankings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/valuation/rankings/top",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "valuation",
+                "rankings",
+                "top"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Portfolio",
+      "item": [
+        {
+          "name": "Get Cluster Composition",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/portfolio/clusters",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio",
+                "clusters"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Cluster Summary",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/portfolio/clusters/summary",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio",
+                "clusters",
+                "summary"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Portfolio Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/portfolio/stats",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio",
+                "stats"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Portfolio Outliers",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/portfolio/outliers",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "portfolio",
+                "outliers"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Get Company Documents",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/api/v1/documents/{ticker}",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "documents",
+                "{ticker}"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Untagged",
+      "item": [
+        {
+          "name": "Root",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:8000/",
+              "host": [
+                "http://localhost:8000"
+              ],
+              "path": [
+                ""
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

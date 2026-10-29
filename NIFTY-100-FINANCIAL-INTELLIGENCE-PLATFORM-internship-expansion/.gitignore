@@ -1,0 +1,37 @@
+# Virtual Environment
+venv/
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Environment Variables
+.env
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VS Code
+.vscode/
+
+# Database (keep the app's database, ignore any others)
+*.db
+!db/nifty100.db
+
+# Output Files
+output/*.csv
+output/*.xlsx
+
+# Processed Data
+data/processed/*.csv
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db

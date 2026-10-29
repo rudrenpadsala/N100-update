@@ -1,0 +1,14 @@
+{
+  "timestamp": "2026-10-29T20:08:08.649481",
+  "summary": {
+    "total_companies": 92,
+    "fy25_reports_available": 92,
+    "fy26_reports_available": 91,
+    "fy26_reports_not_yet_published": 1,
+    "total_extractions_verified": 183,
+    "needs_review": 0
+  },
+  "missing_fy26_companies": [
+    "SIEMENS"
+  ]
+}

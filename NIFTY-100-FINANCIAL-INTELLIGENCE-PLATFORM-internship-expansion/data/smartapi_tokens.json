@@ -1,0 +1,738 @@
+{
+  "ABB": {
+    "company_id": "ABB",
+    "company_name": "Abbott India Ltd",
+    "nse_symbol": "ABBOTINDIA",
+    "trading_symbol": "ABBOTINDIA-EQ",
+    "exchange": "NSE",
+    "token": "17"
+  },
+  "ADANIENSOL": {
+    "company_id": "ADANIENSOL",
+    "company_name": "Adani Energy Solutions Ltd",
+    "nse_symbol": "ADANIENSOL",
+    "trading_symbol": "ADANIENSOL-EQ",
+    "exchange": "NSE",
+    "token": "1023"
+  },
+  "ADANIENT": {
+    "company_id": "ADANIENT",
+    "company_name": "Adani Enterprises Ltd",
+    "nse_symbol": "ADANIENT",
+    "trading_symbol": "ADANIENT-EQ",
+    "exchange": "NSE",
+    "token": "25"
+  },
+  "ADANIGREEN": {
+    "company_id": "ADANIGREEN",
+    "company_name": "Adani Green Energy Ltd",
+    "nse_symbol": "ADANIGREEN",
+    "trading_symbol": "ADANIGREEN-EQ",
+    "exchange": "NSE",
+    "token": "3563"
+  },
+  "ADANIPORTS": {
+    "company_id": "ADANIPORTS",
+    "company_name": "Adani Ports & Special Economic Zone Ltd",
+    "nse_symbol": "ADANIPORTS",
+    "trading_symbol": "ADANIPORTS-EQ",
+    "exchange": "NSE",
+    "token": "15083"
+  },
+  "ADANIPOWER": {
+    "company_id": "ADANIPOWER",
+    "company_name": "Adani Power Ltd",
+    "nse_symbol": "ADANIPOWER",
+    "trading_symbol": "ADANIPOWER-EQ",
+    "exchange": "NSE",
+    "token": "17388"
+  },
+  "AMBUJACEM": {
+    "company_id": "AMBUJACEM",
+    "company_name": "Ambuja Cements Ltd",
+    "nse_symbol": "AMBUJACEM",
+    "trading_symbol": "AMBUJACEM-EQ",
+    "exchange": "NSE",
+    "token": "1270"
+  },
+  "APOLLOHOSP": {
+    "company_id": "APOLLOHOSP",
+    "company_name": "Apollo Hospitals",
+    "nse_symbol": "APOLLOHOSP",
+    "trading_symbol": "APOLLOHOSP-EQ",
+    "exchange": "NSE",
+    "token": "157"
+  },
+  "ASIANPAINT": {
+    "company_id": "ASIANPAINT",
+    "company_name": "Asian Paints",
+    "nse_symbol": "ASIANPAINT",
+    "trading_symbol": "ASIANPAINT-EQ",
+    "exchange": "NSE",
+    "token": "236"
+  },
+  "ATGL": {
+    "company_id": "ATGL",
+    "company_name": "Adani Total Gas Ltd",
+    "nse_symbol": "ATGL",
+    "trading_symbol": "ATGL-EQ",
+    "exchange": "NSE",
+    "token": "2412"
+  },
+  "AXISBANK": {
+    "company_id": "AXISBANK",
+    "company_name": "Axis Bank Ltd",
+    "nse_symbol": "AXISBANK",
+    "trading_symbol": "AXISBANK-EQ",
+    "exchange": "NSE",
+    "token": "5900"
+  },
+  "BAJAJ-AUTO": {
+    "company_id": "BAJAJ-AUTO",
+    "company_name": "Bajaj Auto Ltd",
+    "nse_symbol": "BAJAJ-AUTO",
+    "trading_symbol": "BAJAJ-AUTO-EQ",
+    "exchange": "NSE",
+    "token": "16669"
+  },
+  "BAJAJFINSV": {
+    "company_id": "BAJAJFINSV",
+    "company_name": "Bajaj Finserv Ltd",
+    "nse_symbol": "BAJAJFINSV",
+    "trading_symbol": "BAJAJFINSV-EQ",
+    "exchange": "NSE",
+    "token": "16675"
+  },
+  "BAJAJHLDNG": {
+    "company_id": "BAJAJHLDNG",
+    "company_name": "Bajaj Holdings & Investment Ltd",
+    "nse_symbol": "BAJAJHLDNG",
+    "trading_symbol": "BAJAJHLDNG-EQ",
+    "exchange": "NSE",
+    "token": "303"
+  },
+  "BAJFINANCE": {
+    "company_id": "BAJFINANCE",
+    "company_name": "Bajaj Finance Ltd",
+    "nse_symbol": "BAJFINANCE",
+    "trading_symbol": "BAJFINANCE-EQ",
+    "exchange": "NSE",
+    "token": "317"
+  },
+  "BANKBARODA": {
+    "company_id": "BANKBARODA",
+    "company_name": "Bank of Baroda",
+    "nse_symbol": "BANKBARODA",
+    "trading_symbol": "BANKBARODA-EQ",
+    "exchange": "NSE",
+    "token": "4668"
+  },
+  "BEL": {
+    "company_id": "BEL",
+    "company_name": "Bharat Electronics Ltd",
+    "nse_symbol": "BEL",
+    "trading_symbol": "BEL-EQ",
+    "exchange": "NSE",
+    "token": "383"
+  },
+  "BHARTIARTL": {
+    "company_id": "BHARTIARTL",
+    "company_name": "Bharti Airtel Ltd",
+    "nse_symbol": "BHARTIARTL",
+    "trading_symbol": "BHARTIARTL-EQ",
+    "exchange": "NSE",
+    "token": "10604"
+  },
+  "BHEL": {
+    "company_id": "BHEL",
+    "company_name": "Bharat Heavy Electricals Limited",
+    "nse_symbol": "BHEL",
+    "trading_symbol": "BHEL-EQ",
+    "exchange": "NSE",
+    "token": "438"
+  },
+  "BOSCHLTD": {
+    "company_id": "BOSCHLTD",
+    "company_name": "Bosch Ltd",
+    "nse_symbol": "BOSCHLTD",
+    "trading_symbol": "BOSCHLTD-EQ",
+    "exchange": "NSE",
+    "token": "2181"
+  },
+  "BPCL": {
+    "company_id": "BPCL",
+    "company_name": "Bharat Petroleum Corporation Ltd",
+    "nse_symbol": "BPCL",
+    "trading_symbol": "BPCL-EQ",
+    "exchange": "NSE",
+    "token": "526"
+  },
+  "BRITANNIA": {
+    "company_id": "BRITANNIA",
+    "company_name": "Britannia Industries Ltd",
+    "nse_symbol": "BRITANNIA",
+    "trading_symbol": "BRITANNIA-EQ",
+    "exchange": "NSE",
+    "token": "547"
+  },
+  "CANBK": {
+    "company_id": "CANBK",
+    "company_name": "Canara Bank",
+    "nse_symbol": "CANBK",
+    "trading_symbol": "CANBK-EQ",
+    "exchange": "NSE",
+    "token": "10940"
+  },
+  "CHOLAFIN": {
+    "company_id": "CHOLAFIN",
+    "company_name": "Cholamandalam Investment & Finance Company Ltd",
+    "nse_symbol": "CHOLAFIN",
+    "trading_symbol": "CHOLAFIN-EQ",
+    "exchange": "NSE",
+    "token": "685"
+  },
+  "CIPLA": {
+    "company_id": "CIPLA",
+    "company_name": "Cipla Ltd",
+    "nse_symbol": "CIPLA",
+    "trading_symbol": "CIPLA-EQ",
+    "exchange": "NSE",
+    "token": "694"
+  },
+  "COALINDIA": {
+    "company_id": "COALINDIA",
+    "company_name": "Coal India Ltd",
+    "nse_symbol": "COALINDIA",
+    "trading_symbol": "COALINDIA-EQ",
+    "exchange": "NSE",
+    "token": "20374"
+  },
+  "DABUR": {
+    "company_id": "DABUR",
+    "company_name": "Dabur India Ltd",
+    "nse_symbol": "DABUR",
+    "trading_symbol": "DABUR-EQ",
+    "exchange": "NSE",
+    "token": "772"
+  },
+  "DIVISLAB": {
+    "company_id": "DIVISLAB",
+    "company_name": "Divis Laboratories Ltd",
+    "nse_symbol": "DIVISLAB",
+    "trading_symbol": "DIVISLAB-EQ",
+    "exchange": "NSE",
+    "token": "10945"
+  },
+  "DLF": {
+    "company_id": "DLF",
+    "company_name": "DLF Ltd",
+    "nse_symbol": "DLF",
+    "trading_symbol": "DLF-EQ",
+    "exchange": "NSE",
+    "token": "14732"
+  },
+  "DMART": {
+    "company_id": "DMART",
+    "company_name": "Avenue Supermarts Ltd",
+    "nse_symbol": "DMART",
+    "trading_symbol": "DMART-EQ",
+    "exchange": "NSE",
+    "token": "19913"
+  },
+  "DRREDDY": {
+    "company_id": "DRREDDY",
+    "company_name": "Dr Reddys Laboratories Ltd",
+    "nse_symbol": "DRREDDY",
+    "trading_symbol": "DRREDDY-EQ",
+    "exchange": "NSE",
+    "token": "881"
+  },
+  "EICHERMOT": {
+    "company_id": "EICHERMOT",
+    "company_name": "Eicher Motors Ltd",
+    "nse_symbol": "EICHERMOT",
+    "trading_symbol": "EICHERMOT-EQ",
+    "exchange": "NSE",
+    "token": "910"
+  },
+  "GAIL": {
+    "company_id": "GAIL",
+    "company_name": "GAIL (India) Ltd",
+    "nse_symbol": "GAIL",
+    "trading_symbol": "GAIL-EQ",
+    "exchange": "NSE",
+    "token": "4749"
+  },
+  "GODREJCP": {
+    "company_id": "GODREJCP",
+    "company_name": "Godrej Consumer Products Ltd",
+    "nse_symbol": "GODREJCP",
+    "trading_symbol": "GODREJCP-EQ",
+    "exchange": "NSE",
+    "token": "10099"
+  },
+  "GRASIM": {
+    "company_id": "GRASIM",
+    "company_name": "Grasim Industries Ltd",
+    "nse_symbol": "GRASIM",
+    "trading_symbol": "GRASIM-EQ",
+    "exchange": "NSE",
+    "token": "1232"
+  },
+  "HAL": {
+    "company_id": "HAL",
+    "company_name": "Hindustan Aeronautics Ltd",
+    "nse_symbol": "HAL",
+    "trading_symbol": "HAL-EQ",
+    "exchange": "NSE",
+    "token": "2303"
+  },
+  "HAVELLS": {
+    "company_id": "HAVELLS",
+    "company_name": "Havells India Ltd",
+    "nse_symbol": "HAVELLS",
+    "trading_symbol": "HAVELLS-EQ",
+    "exchange": "NSE",
+    "token": "9819"
+  },
+  "HCLTECH": {
+    "company_id": "HCLTECH",
+    "company_name": "HCL Technologies Ltd",
+    "nse_symbol": "HCLTECH",
+    "trading_symbol": "HCLTECH-EQ",
+    "exchange": "NSE",
+    "token": "7229"
+  },
+  "HDFCBANK": {
+    "company_id": "HDFCBANK",
+    "company_name": "HDFC Bank Ltd",
+    "nse_symbol": "HDFCBANK",
+    "trading_symbol": "HDFCBANK-EQ",
+    "exchange": "NSE",
+    "token": "1333"
+  },
+  "HDFCLIFE": {
+    "company_id": "HDFCLIFE",
+    "company_name": "HDFC Life Insurance Company Ltd",
+    "nse_symbol": "HDFCLIFE",
+    "trading_symbol": "HDFCLIFE-EQ",
+    "exchange": "NSE",
+    "token": "467"
+  },
+  "HEROMOTOCO": {
+    "company_id": "HEROMOTOCO",
+    "company_name": "Hero MotoCorp Ltd",
+    "nse_symbol": "HEROMOTOCO",
+    "trading_symbol": "HEROMOTOCO-EQ",
+    "exchange": "NSE",
+    "token": "1348"
+  },
+  "HINDALCO": {
+    "company_id": "HINDALCO",
+    "company_name": "Hindalco Industries Ltd",
+    "nse_symbol": "HINDALCO",
+    "trading_symbol": "HINDALCO-EQ",
+    "exchange": "NSE",
+    "token": "1363"
+  },
+  "HINDUNILVR": {
+    "company_id": "HINDUNILVR",
+    "company_name": "Hindustan Unilever Ltd",
+    "nse_symbol": "HINDUNILVR",
+    "trading_symbol": "HINDUNILVR-EQ",
+    "exchange": "NSE",
+    "token": "1394"
+  },
+  "ICICIBANK": {
+    "company_id": "ICICIBANK",
+    "company_name": "ICICI Bank Ltd",
+    "nse_symbol": "ICICIBANK",
+    "trading_symbol": "ICICIBANK-EQ",
+    "exchange": "NSE",
+    "token": "4963"
+  },
+  "ICICIGI": {
+    "company_id": "ICICIGI",
+    "company_name": "ICICI Lombard General Insurance Company Ltd",
+    "nse_symbol": "ICICIGI",
+    "trading_symbol": "ICICIGI-EQ",
+    "exchange": "NSE",
+    "token": "21770"
+  },
+  "ICICIPRULI": {
+    "company_id": "ICICIPRULI",
+    "company_name": "ICICI Prudential Life Insurance Company Ltd",
+    "nse_symbol": "ICICIPRULI",
+    "trading_symbol": "ICICIPRULI-EQ",
+    "exchange": "NSE",
+    "token": "18652"
+  },
+  "INDIGO": {
+    "company_id": "INDIGO",
+    "company_name": "Interglobe Aviation Ltd",
+    "nse_symbol": "INDIGO",
+    "trading_symbol": "INDIGO-EQ",
+    "exchange": "NSE",
+    "token": "11195"
+  },
+  "INDUSINDBK": {
+    "company_id": "INDUSINDBK",
+    "company_name": "IndusInd Bank Ltd",
+    "nse_symbol": "INDUSINDBK",
+    "trading_symbol": "INDUSINDBK-EQ",
+    "exchange": "NSE",
+    "token": "5258"
+  },
+  "INFY": {
+    "company_id": "INFY",
+    "company_name": "Infosys Ltd",
+    "nse_symbol": "INFY",
+    "trading_symbol": "INFY-EQ",
+    "exchange": "NSE",
+    "token": "1594"
+  },
+  "IOC": {
+    "company_id": "IOC",
+    "company_name": "Indian Oil Corporation",
+    "nse_symbol": "IOC",
+    "trading_symbol": "IOC-EQ",
+    "exchange": "NSE",
+    "token": "1624"
+  },
+  "IRCTC": {
+    "company_id": "IRCTC",
+    "company_name": "Indian Railway Catering & Tourism Corporation Ltd",
+    "nse_symbol": "IRCTC",
+    "trading_symbol": "IRCTC-EQ",
+    "exchange": "NSE",
+    "token": "13611"
+  },
+  "IRFC": {
+    "company_id": "IRFC",
+    "company_name": "Indian Railway Finance Corporation Ltd",
+    "nse_symbol": "IRFC",
+    "trading_symbol": "IRFC-EQ",
+    "exchange": "NSE",
+    "token": "20242"
+  },
+  "ITC": {
+    "company_id": "ITC",
+    "company_name": "ITC Ltd",
+    "nse_symbol": "ITC",
+    "trading_symbol": "ITC-EQ",
+    "exchange": "NSE",
+    "token": "1660"
+  },
+  "JINDALSTEL": {
+    "company_id": "JINDALSTEL",
+    "company_name": "Jindal Steel & Power Ltd",
+    "nse_symbol": "JINDALSTEL",
+    "trading_symbol": "JINDALSTEL-EQ",
+    "exchange": "NSE",
+    "token": "6733"
+  },
+  "JIOFIN": {
+    "company_id": "JIOFIN",
+    "company_name": "Jio Financial Services Ltd",
+    "nse_symbol": "JIOFIN",
+    "trading_symbol": "JIOFIN-EQ",
+    "exchange": "NSE",
+    "token": "18143"
+  },
+  "JSWENERGY": {
+    "company_id": "JSWENERGY",
+    "company_name": "JSW Energy Ltd",
+    "nse_symbol": "JSWENERGY",
+    "trading_symbol": "JSWENERGY-EQ",
+    "exchange": "NSE",
+    "token": "17939"
+  },
+  "JSWSTEEL": {
+    "company_id": "JSWSTEEL",
+    "company_name": "JSW Steel Ltd",
+    "nse_symbol": "JSWSTEEL",
+    "trading_symbol": "JSWSTEEL-EQ",
+    "exchange": "NSE",
+    "token": "11723"
+  },
+  "KOTAKBANK": {
+    "company_id": "KOTAKBANK",
+    "company_name": "Kotak Mahindra Bank Ltd",
+    "nse_symbol": "KOTAKBANK",
+    "trading_symbol": "KOTAKBANK-EQ",
+    "exchange": "NSE",
+    "token": "1922"
+  },
+  "LICI": {
+    "company_id": "LICI",
+    "company_name": "Life Insurance Corporation of India",
+    "nse_symbol": "LICI",
+    "trading_symbol": "LICI-EQ",
+    "exchange": "NSE",
+    "token": "9444"
+  },
+  "LODHA": {
+    "company_id": "LODHA",
+    "company_name": "Macrotech Developers Ltd",
+    "nse_symbol": "LODHA",
+    "trading_symbol": "LODHA-EQ",
+    "exchange": "NSE",
+    "token": "2868"
+  },
+  "LT": {
+    "company_id": "LT",
+    "company_name": "Larsen & Toubro Ltd",
+    "nse_symbol": "LT",
+    "trading_symbol": "LT-EQ",
+    "exchange": "NSE",
+    "token": "11483"
+  },
+  "LTIM": {
+    "company_id": "LTIM",
+    "company_name": "LTIMindtree Ltd",
+    "nse_symbol": "LTIM",
+    "trading_symbol": "LTIM-EQ",
+    "exchange": "NSE",
+    "token": "17818"
+  },
+  "M&M": {
+    "company_id": "M&M",
+    "company_name": "Mahindra & Mahindra Ltd",
+    "nse_symbol": "M",
+    "trading_symbol": "M-EQ",
+    "exchange": "NSE",
+    "token": "2031"
+  },
+  "MARUTI": {
+    "company_id": "MARUTI",
+    "company_name": "Maruti Suzuki India Ltd",
+    "nse_symbol": "MARUTI",
+    "trading_symbol": "MARUTI-EQ",
+    "exchange": "NSE",
+    "token": "10999"
+  },
+  "MOTHERSON": {
+    "company_id": "MOTHERSON",
+    "company_name": "Samvardhana Motherson International Ltd",
+    "nse_symbol": "MOTHERSON",
+    "trading_symbol": "MOTHERSON-EQ",
+    "exchange": "NSE",
+    "token": "4204"
+  },
+  "NAUKRI": {
+    "company_id": "NAUKRI",
+    "company_name": "Info Edge (India) Ltd",
+    "nse_symbol": "NAUKRI",
+    "trading_symbol": "NAUKRI-EQ",
+    "exchange": "NSE",
+    "token": "13751"
+  },
+  "NESTLEIND": {
+    "company_id": "NESTLEIND",
+    "company_name": "Nestle India Ltd",
+    "nse_symbol": "NESTLEIND",
+    "trading_symbol": "NESTLEIND-EQ",
+    "exchange": "NSE",
+    "token": "17963"
+  },
+  "NHPC": {
+    "company_id": "NHPC",
+    "company_name": "NHPC Ltd",
+    "nse_symbol": "NHPC",
+    "trading_symbol": "NHPC-EQ",
+    "exchange": "NSE",
+    "token": "17409"
+  },
+  "NTPC": {
+    "company_id": "NTPC",
+    "company_name": "NTPC Ltd",
+    "nse_symbol": "NTPC",
+    "trading_symbol": "NTPC-EQ",
+    "exchange": "NSE",
+    "token": "11630"
+  },
+  "ONGC": {
+    "company_id": "ONGC",
+    "company_name": "Oil & Natural Gas Corpn Ltd",
+    "nse_symbol": "ONGC",
+    "trading_symbol": "ONGC-EQ",
+    "exchange": "NSE",
+    "token": "2475"
+  },
+  "PFC": {
+    "company_id": "PFC",
+    "company_name": "Power Finance Corporation Ltd",
+    "nse_symbol": "PFC",
+    "trading_symbol": "PFC-EQ",
+    "exchange": "NSE",
+    "token": "14299"
+  },
+  "PIDILITIND": {
+    "company_id": "PIDILITIND",
+    "company_name": "Pidilite Industries Ltd",
+    "nse_symbol": "PIDILITIND",
+    "trading_symbol": "PIDILITIND-EQ",
+    "exchange": "NSE",
+    "token": "2664"
+  },
+  "PNB": {
+    "company_id": "PNB",
+    "company_name": "Punjab National Bank",
+    "nse_symbol": "PNB",
+    "trading_symbol": "PNB-EQ",
+    "exchange": "NSE",
+    "token": "10666"
+  },
+  "POWERGRID": {
+    "company_id": "POWERGRID",
+    "company_name": "Power Grid Corporation of India Ltd",
+    "nse_symbol": "POWERGRID",
+    "trading_symbol": "POWERGRID-EQ",
+    "exchange": "NSE",
+    "token": "14977"
+  },
+  "RECLTD": {
+    "company_id": "RECLTD",
+    "company_name": "REC Ltd",
+    "nse_symbol": "RECLTD",
+    "trading_symbol": "RECLTD-EQ",
+    "exchange": "NSE",
+    "token": "15355"
+  },
+  "RELIANCE": {
+    "company_id": "RELIANCE",
+    "company_name": "Reliance Industries Ltd",
+    "nse_symbol": "RELIANCE",
+    "trading_symbol": "RELIANCE-EQ",
+    "exchange": "NSE",
+    "token": "2885"
+  },
+  "SBILIFE": {
+    "company_id": "SBILIFE",
+    "company_name": "SBI Life Insurance Company Ltd",
+    "nse_symbol": "SBILIFE",
+    "trading_symbol": "SBILIFE-EQ",
+    "exchange": "NSE",
+    "token": "21808"
+  },
+  "SBIN": {
+    "company_id": "SBIN",
+    "company_name": "State Bank of India",
+    "nse_symbol": "SBIN",
+    "trading_symbol": "SBIN-EQ",
+    "exchange": "NSE",
+    "token": "3045"
+  },
+  "SHREECEM": {
+    "company_id": "SHREECEM",
+    "company_name": "Shree Cement Ltd",
+    "nse_symbol": "SHREECEM",
+    "trading_symbol": "SHREECEM-EQ",
+    "exchange": "NSE",
+    "token": "3103"
+  },
+  "SHRIRAMFIN": {
+    "company_id": "SHRIRAMFIN",
+    "company_name": "Shriram Finance Ltd",
+    "nse_symbol": "SHRIRAMFIN",
+    "trading_symbol": "SHRIRAMFIN-EQ",
+    "exchange": "NSE",
+    "token": "4306"
+  },
+  "SIEMENS": {
+    "company_id": "SIEMENS",
+    "company_name": "Siemens Ltd",
+    "nse_symbol": "SIEMENS",
+    "trading_symbol": "SIEMENS-EQ",
+    "exchange": "NSE",
+    "token": "3150"
+  },
+  "SUNPHARMA": {
+    "company_id": "SUNPHARMA",
+    "company_name": "Sun Pharmaceuticals Industries Ltd",
+    "nse_symbol": "SUNPHARMA",
+    "trading_symbol": "SUNPHARMA-EQ",
+    "exchange": "NSE",
+    "token": "3351"
+  },
+  "TATACONSUM": {
+    "company_id": "TATACONSUM",
+    "company_name": "Tata Consumer Products Ltd",
+    "nse_symbol": "TATACONSUM",
+    "trading_symbol": "TATACONSUM-EQ",
+    "exchange": "NSE",
+    "token": "3432"
+  },
+  "TATAMOTORS": {
+    "company_id": "TATAMOTORS",
+    "company_name": "Tata Motors Ltd",
+    "nse_symbol": "TATAMOTORS",
+    "trading_symbol": "TATAMOTORS-EQ",
+    "exchange": "NSE",
+    "token": "3456"
+  },
+  "TATAPOWER": {
+    "company_id": "TATAPOWER",
+    "company_name": "Tata Power Company Ltd",
+    "nse_symbol": "TATAPOWER",
+    "trading_symbol": "TATAPOWER-EQ",
+    "exchange": "NSE",
+    "token": "3426"
+  },
+  "TATASTEEL": {
+    "company_id": "TATASTEEL",
+    "company_name": "Tata Steel Ltd",
+    "nse_symbol": "TATASTEEL",
+    "trading_symbol": "TATASTEEL-EQ",
+    "exchange": "NSE",
+    "token": "3499"
+  },
+  "TCS": {
+    "company_id": "TCS",
+    "company_name": "Tata Consultancy Services Ltd",
+    "nse_symbol": "TCS",
+    "trading_symbol": "TCS-EQ",
+    "exchange": "NSE",
+    "token": "11536"
+  },
+  "TECHM": {
+    "company_id": "TECHM",
+    "company_name": "Tech Mahindra Ltd",
+    "nse_symbol": "TECHM",
+    "trading_symbol": "TECHM-EQ",
+    "exchange": "NSE",
+    "token": "13538"
+  },
+  "TITAN": {
+    "company_id": "TITAN",
+    "company_name": "Titan Company Ltd",
+    "nse_symbol": "TITAN",
+    "trading_symbol": "TITAN-EQ",
+    "exchange": "NSE",
+    "token": "3506"
+  },
+  "TORNTPHARM": {
+    "company_id": "TORNTPHARM",
+    "company_name": "Torrent Pharmaceuticals Ltd",
+    "nse_symbol": "TORNTPHARM",
+    "trading_symbol": "TORNTPHARM-EQ",
+    "exchange": "NSE",
+    "token": "3518"
+  },
+  "TRENT": {
+    "company_id": "TRENT",
+    "company_name": "Trent Ltd",
+    "nse_symbol": "TRENT",
+    "trading_symbol": "TRENT-EQ",
+    "exchange": "NSE",
+    "token": "1964"
+  },
+  "TVSMOTOR": {
+    "company_id": "TVSMOTOR",
+    "company_name": "TVS Motor Company Ltd",
+    "nse_symbol": "TVSMOTOR",
+    "trading_symbol": "TVSMOTOR-EQ",
+    "exchange": "NSE",
+    "token": "8479"
+  }
+}
